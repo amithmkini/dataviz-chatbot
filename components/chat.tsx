@@ -45,7 +45,6 @@ export function Chat({ id, className, session, missingKeys }: ChatProps) {
 
   useEffect(() => {
     setNewChatId(id)
-    console.log("Testing: ", id, messages)
   }, [id])
 
   useEffect(() => {
