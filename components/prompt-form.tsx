@@ -2,9 +2,9 @@
 
 import * as React from 'react'
 import Textarea from 'react-textarea-autosize'
+import { toast } from 'sonner'
 
-import { useActions, useUIState } from 'ai/rsc'
-
+import { useActions, useUIState, useAIState } from 'ai/rsc'
 import { UserMessage } from './stocks/message'
 import { type AI } from '@/lib/chat/actions'
 import { Button } from '@/components/ui/button'
@@ -30,18 +30,22 @@ export function PromptForm({
   const inputRef = React.useRef<HTMLTextAreaElement>(null)
   const { submitUserMessage } = useActions()
   const [_, setMessages] = useUIState<typeof AI>()
-
-  React.useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [])
+  const [aiState, setAIState] = useAIState<typeof AI>()
 
   return (
     <form
       ref={formRef}
       onSubmit={async (e: any) => {
         e.preventDefault()
+
+        // Check if databaseUrl and databaseAuthToken is set
+        if (
+          aiState.databaseUrl === '' ||
+          aiState.databaseAuthToken === ''
+        ) {
+          toast.error('Please set database credentials first.')
+          return
+        }
 
         // Blur focus on mobile
         if (window.innerWidth < 600) {
@@ -57,6 +61,8 @@ export function PromptForm({
           ...currentMessages,
           {
             id: nanoid(),
+            databaseUrl: '',
+            databaseAuthToken: '',
             display: <UserMessage>{value}</UserMessage>
           }
         ])
