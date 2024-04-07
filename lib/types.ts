@@ -7,6 +7,8 @@ export interface Chat extends Record<string, any> {
   userId: string
   path: string
   messages: Message[]
+  databaseUrl: string
+  databaseAuthToken: string
   sharePath?: string
 }
 

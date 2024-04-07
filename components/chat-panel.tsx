@@ -78,6 +78,8 @@ export function ChatPanel({
                     ...currentMessages,
                     {
                       id: nanoid(),
+                      databaseUrl: '',
+                      databaseAuthToken: '',
                       display: <UserMessage>{example.message}</UserMessage>
                     }
                   ])

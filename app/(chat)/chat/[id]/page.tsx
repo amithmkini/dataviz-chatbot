@@ -47,8 +47,13 @@ export default async function ChatPage({ params }: ChatPageProps) {
     notFound()
   }
 
+  const databaseUrl = chat?.databaseUrl ?? ''
+  const databaseAuthToken = chat?.databaseAuthToken ?? ''
+
   return (
-    <AI initialAIState={{ chatId: chat.id, messages: chat.messages }}>
+    <AI initialAIState={
+      { chatId: chat.id, databaseUrl, databaseAuthToken, messages: chat.messages }
+    }>
       <Chat
         id={chat.id}
         session={session}

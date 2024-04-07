@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { createClient, LibsqlError, ResultSet } from "@libsql/client/web";
 import {
   createAI,
   createStreamableUI,
@@ -9,6 +10,8 @@ import {
   createStreamableValue
 } from 'ai/rsc'
 import OpenAI from 'openai'
+import dedent from 'dedent'
+import { kv } from '@vercel/kv'
 
 import {
   spinner,
@@ -39,6 +42,121 @@ import { auth } from '@/auth'
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
 })
+
+async function filter_schema(output: ResultSet) {
+  // We need to get all the SQL from the rows list.Since we are simply reading 
+  // from the table, we need not know the defaults and constraints.
+  // So we use an OpenAI call to filter out the unnecessary information.
+  const schemaString = output.rows.map(row => row.sql).join('\n');
+
+  // Calculate the hash of this string, and check the cache before
+  // calling OpenAI.
+  const hashHex = await crypto.subtle.digest(
+    'SHA-256', new TextEncoder().encode(schemaString))
+    .then(hash => Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join(''));
+  
+  const cacheKey = `schema:${hashHex}`;
+
+  const cached = await kv.hget(cacheKey, 'filtered');
+  if (cached) {
+    return cached;
+  }
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-3.5-turbo",
+    messages: [
+      {
+        role: "system",
+        content: dedent`You are given a SQL schema from a SQLite database. 
+                        Your task is to remove unnecessary information from 
+                        the schema in the context of reading, such as
+                        DEFAULT, AUTOINCREMENT, NOT NULL, etc.
+                        ONLY REPLY WITH THE FILTERED SCHEMA.`
+      },
+      {
+        role: "system",
+        content: schemaString
+      }
+    ]
+  });
+
+  const filtered = completion.choices[0].message.content;
+  await kv.hset(cacheKey, { filtered });
+  return filtered;
+}
+
+async function setDatabaseCreds(url: string, authToken: string) {
+  'use server'
+  const aiState = getMutableAIState<typeof AI>()
+
+  // If the aiState already has databaseUrl and databaseAuthToken,
+  // don't do anything. We are not going to update the URL as well,
+  // since that would ruin the conversation with extra schemas.
+  if (aiState.get().databaseUrl && 
+      aiState.get().databaseAuthToken) {
+    return {
+      success: false,
+      error: "Database URL and auth token already set."
+    }
+  }
+
+  // Use Turso to connect to the DB using the URL, and see if the 
+  // connection is successful. If it is, save the URL to the state.
+  try {
+    const client = createClient({
+      url,
+      authToken,
+    });
+    // Get the schema of the database
+    const output = await client.execute(
+      "SELECT sql FROM sqlite_master WHERE type='table';"
+    );
+    const schema = await filter_schema(output);
+    // Now add the schema to the state.
+    const schemaMessage = `[Database schema]\n${schema}`;
+    
+
+    aiState.done({
+      ...aiState.get(),
+      databaseUrl: url,
+      databaseAuthToken: authToken,
+      // messages: [
+      //   ...aiState.get().messages,
+      //   {
+      //     id: nanoid(),
+      //     role: 'system',
+      //     content: dedent`You are a data analyst, using SQL to query a database,
+      //     and using that data to respond. When the user asks for any information,
+      //     you should generate queries to get the data from the database, and use the
+      //     data to provide insightful response.
+  
+      //     When a SQL query errors out, try to simplify the SQL query to get a
+      //     feeling of the data, and then build on that.
+      //     The SQL schema is given below after the string \`[Database schema]\`.
+      //     You have the following functions at hand for your aid:
+      //     - \`query_sql\`: Use this to query the database with a SQL query.`
+      //   },
+      //   {
+      //     id: nanoid(),
+      //     role: 'system',
+      //     content: schemaMessage
+      //   }
+      // ]
+    });
+  } catch (e) {
+    if (e instanceof LibsqlError) {
+      return {
+        success: false,
+        error: e.message
+      }
+    }
+  }
+  return {
+    success: true
+  }
+}
 
 async function confirmPurchase(symbol: string, price: number, amount: number) {
   'use server'
@@ -402,21 +520,26 @@ export type Message = {
 
 export type AIState = {
   chatId: string
+  databaseUrl: string
+  databaseAuthToken: string
   messages: Message[]
 }
 
 export type UIState = {
   id: string
+  databaseUrl: string
+  databaseAuthToken: string
   display: React.ReactNode
 }[]
 
 export const AI = createAI<AIState, UIState>({
   actions: {
     submitUserMessage,
-    confirmPurchase
+    confirmPurchase,
+    setDatabaseCreds
   },
   initialUIState: [],
-  initialAIState: { chatId: nanoid(), messages: [] },
+  initialAIState: { chatId: nanoid(), databaseUrl: '', databaseAuthToken: '', messages: [] },
   unstable_onGetUIState: async () => {
     'use server'
 
@@ -424,7 +547,6 @@ export const AI = createAI<AIState, UIState>({
 
     if (session && session.user) {
       const aiState = getAIState()
-
       if (aiState) {
         const uiState = getUIStateFromAIState(aiState)
         return uiState
@@ -439,7 +561,12 @@ export const AI = createAI<AIState, UIState>({
     const session = await auth()
 
     if (session && session.user) {
-      const { chatId, messages } = state
+      const { chatId, messages, databaseUrl, databaseAuthToken } = state
+
+      // If there are no messages, then don't save the chat.
+      if (messages.length === 0) {
+        return
+      }
 
       const createdAt = new Date()
       const userId = session.user.id as string
@@ -452,7 +579,9 @@ export const AI = createAI<AIState, UIState>({
         userId,
         createdAt,
         messages,
-        path
+        path,
+        databaseUrl,
+        databaseAuthToken
       }
 
       await saveChat(chat)
@@ -467,6 +596,8 @@ export const getUIStateFromAIState = (aiState: Chat) => {
     .filter(message => message.role !== 'system')
     .map((message, index) => ({
       id: `${aiState.chatId}-${index}`,
+      databaseUrl: aiState.databaseUrl,
+      databaseAuthToken: aiState.databaseAuthToken,
       display:
         message.role === 'function' ? (
           message.name === 'listStocks' ? (
