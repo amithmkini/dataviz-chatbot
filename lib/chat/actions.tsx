@@ -31,15 +31,14 @@ import { saveChat } from '@/app/actions'
 import { SpinnerMessage, UserMessage } from '@/components/stocks/message'
 import { Chat } from '@/lib/types'
 import { auth } from '@/auth'
-import { ChatCompletionCreateParams, ChatCompletionMessageParam } from 'openai/resources';
-import { CreateMessage, JSONValue, OpenAIStream, Tool, ToolCall, ToolCallPayload } from 'ai';
+import { ChatCompletionMessageParam } from 'openai/resources';
+import { JSONValue, OpenAIStream, Tool, ToolCall, ToolCallPayload } from 'ai';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
 })
 
-const model = 'gpt-4-turbo-preview'
-// const model = 'gpt-3.5-turbo'
+const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo'
 
 async function filter_schema(output: ResultSet) {
   // We need to get all the SQL from the rows list.Since we are simply reading 
@@ -107,7 +106,8 @@ async function setDatabaseCreds(url: string, authToken: string) {
       url,
       authToken,
     });
-    // Get the schema of the database
+    // Get the schema of the database, note that this is a SQLite
+    //  specific query, and may not work with other databases.
     const output = await client.execute(
       "SELECT sql FROM sqlite_master WHERE type='table';"
     );
@@ -152,7 +152,7 @@ async function query_database(query: string, aiState: any) {
     });
 
     const output = await client.execute(query)
-    const joined = JSON.stringify(output.rows)
+    const joined = output.rows as Array<JSONValue>
 
     return {
       success: true,
@@ -429,7 +429,7 @@ async function submitUserMessage(content: string) {
           newMessages.push({
             tool_call_id: toolCall.id,
             function_name: toolCall.func.name,
-            tool_call_result: JSON.stringify(output)
+            tool_call_result: output
           })
         }
 
