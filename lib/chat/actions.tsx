@@ -6,7 +6,6 @@ import {
   createStreamableUI,
   getMutableAIState,
   getAIState,
-  render,
   createStreamableValue
 } from 'ai/rsc'
 import OpenAI from 'openai'
@@ -19,15 +18,9 @@ import {
   BotMessage,
   SystemMessage,
   Stock,
-  Purchase
 } from '@/components/stocks'
 
-import { z } from 'zod'
-import { EventsSkeleton } from '@/components/stocks/events-skeleton'
-import { Events } from '@/components/stocks/events'
-import { StocksSkeleton } from '@/components/stocks/stocks-skeleton'
-import { Stocks } from '@/components/stocks/stocks'
-import { StockSkeleton } from '@/components/stocks/stock-skeleton'
+
 import {
   formatNumber,
   runAsyncFnWithoutBlocking,
@@ -38,10 +31,15 @@ import { saveChat } from '@/app/actions'
 import { SpinnerMessage, UserMessage } from '@/components/stocks/message'
 import { Chat } from '@/lib/types'
 import { auth } from '@/auth'
+import { ChatCompletionCreateParams, ChatCompletionMessageParam } from 'openai/resources';
+import { CreateMessage, JSONValue, OpenAIStream, Tool, ToolCall, ToolCallPayload } from 'ai';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
 })
+
+const model = 'gpt-4-turbo-preview'
+// const model = 'gpt-3.5-turbo'
 
 async function filter_schema(output: ResultSet) {
   // We need to get all the SQL from the rows list.Since we are simply reading 
@@ -122,28 +120,14 @@ async function setDatabaseCreds(url: string, authToken: string) {
       ...aiState.get(),
       databaseUrl: url,
       databaseAuthToken: authToken,
-      // messages: [
-      //   ...aiState.get().messages,
-      //   {
-      //     id: nanoid(),
-      //     role: 'system',
-      //     content: dedent`You are a data analyst, using SQL to query a database,
-      //     and using that data to respond. When the user asks for any information,
-      //     you should generate queries to get the data from the database, and use the
-      //     data to provide insightful response.
-  
-      //     When a SQL query errors out, try to simplify the SQL query to get a
-      //     feeling of the data, and then build on that.
-      //     The SQL schema is given below after the string \`[Database schema]\`.
-      //     You have the following functions at hand for your aid:
-      //     - \`query_sql\`: Use this to query the database with a SQL query.`
-      //   },
-      //   {
-      //     id: nanoid(),
-      //     role: 'system',
-      //     content: schemaMessage
-      //   }
-      // ]
+      messages: [
+        ...aiState.get().messages,
+        {
+          id: nanoid(),
+          role: 'system',
+          content: schemaMessage
+        }
+      ]
     });
   } catch (e) {
     if (e instanceof LibsqlError) {
@@ -155,6 +139,37 @@ async function setDatabaseCreds(url: string, authToken: string) {
   }
   return {
     success: true
+  }
+}
+
+async function query_database(query: string, aiState: any) {
+  'use server'
+
+  try {
+    const client = createClient({
+      url: aiState.get().databaseUrl,
+      authToken: aiState.get().databaseAuthToken
+    });
+
+    const output = await client.execute(query)
+    const joined = JSON.stringify(output.rows)
+
+    return {
+      success: true,
+      output: joined
+    }
+
+  } catch (e) {
+    if (e instanceof LibsqlError) {
+      return {
+        success: false,
+        output: e.message
+      }
+    }
+  }
+  return {
+    success: false,
+    output: "Unknown error"
   }
 }
 
@@ -239,6 +254,86 @@ async function confirmPurchase(symbol: string, price: number, amount: number) {
   }
 }
 
+const system_prompt = {
+  role: 'system',
+  name: 'system_prompt', // This is just there to satisfy TypeScript. Fuck you, TypeScript
+  content: dedent`
+    You are a data analyst with access to a SQL DB. Your task is to answer users question using
+    the data from the database. Query the SQLite database and then answer questions or show the charts,
+    using the data.
+
+    The database schema is given to you as [Database schema] <schema>. If it's not given, mention that
+    you don't have the schema.
+
+    If the users ask you run a SQL query for something, call \`query_database\` to get the results.
+    If you want to draw a bar chart, call \`show_chart\` with the title and values.
+
+    Besides that, you can also chat with users and do some calculations if needed.`
+}
+
+const tools: Tool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'query_database',
+      description: 'Query the database with a SQL query.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The SQL query to run on the database.'
+          }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'show_chart',
+      description: 'Show a bar chart',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'The title of the chart.'
+          },
+          values: {
+            type: 'object',
+            description: dedent`
+              The x-axis and y-axis values. Should be of the format:
+              {
+                "x": ["A", "B", "C"],
+                "y": [1, 2, 3]
+              }
+            `,
+            properties: {
+              x: {
+                type: 'array',
+                descrption: 'The x-axis values.',
+                items: {
+                  type: 'string'
+                }
+              },
+              y: {
+                type: 'array',
+                description: 'The y-axis values.',
+                items: {
+                  type: 'number'
+                }
+              }
+            }
+          },
+        },
+        required: ['title', 'values']
+      }
+    }
+  }
+]
+
 async function submitUserMessage(content: string) {
   'use server'
 
@@ -256,258 +351,176 @@ async function submitUserMessage(content: string) {
     ]
   })
 
-  let textStream: undefined | ReturnType<typeof createStreamableValue<string>>
-  let textNode: undefined | React.ReactNode
-
-  const ui = render({
-    model: 'gpt-3.5-turbo',
-    provider: openai,
-    initial: <SpinnerMessage />,
+  const response = await openai.chat.completions.create({
+    model,
+    stream: true,
     messages: [
-      {
-        role: 'system',
-        content: `\
-You are a stock trading conversation bot and you can help users buy stocks, step by step.
-You and the user can discuss stock prices and the user can adjust the amount of stocks they want to buy, or place an order, in the UI.
-
-Messages inside [] means that it's a UI element or a user event. For example:
-- "[Price of AAPL = 100]" means that an interface of the stock price of AAPL is shown to the user.
-- "[User has changed the amount of AAPL to 10]" means that the user has changed the amount of AAPL to 10 in the UI.
-
-If the user requests purchasing a stock, call \`show_stock_purchase_ui\` to show the purchase UI.
-If the user just wants the price, call \`show_stock_price\` to show the price.
-If you want to show trending stocks, call \`list_stocks\`.
-If you want to show events, call \`get_events\`.
-If the user wants to sell stock, or complete another impossible task, respond that you are a demo and cannot do that.
-
-Besides that, you can also chat with users and do some calculations if needed.`
-      },
+      system_prompt,
       ...aiState.get().messages.map((message: any) => ({
         role: message.role,
         content: message.content,
-        name: message.name
-      }))
-    ],
-    text: ({ content, done, delta }) => {
-      if (!textStream) {
-        textStream = createStreamableValue('')
-        textNode = <BotMessage content={textStream.value} />
-      }
+        name: message.name,
+        tool_call_id: message.tool_call_id,
+        tool_calls: message.tool_calls
+      })) 
+    ] as ChatCompletionMessageParam[],
+    tools,
+    tool_choice: 'auto',
+  })
 
-      if (done) {
-        textStream.done()
-        aiState.done({
+  const responseUI = createStreamableUI(<></>)
+
+  runAsyncFnWithoutBlocking(async () => {
+    let textStream: undefined | ReturnType<typeof createStreamableValue<string>>
+    let textNode: undefined | React.ReactNode
+    let textValue: string = ''
+
+    const stream = OpenAIStream(response, {
+      experimental_onToolCall: async (
+        call: ToolCallPayload,
+        appendToolCallMessage,
+      ) => {
+
+        let newMessages: ToolCallResponse[] = []
+
+        const tool_call_message = {
+          role: 'assistant',
+          content: '',
+          tool_calls: call.tools.map((toolCall) => ({
+            id: toolCall.id,
+            type: toolCall.type,
+            function: {
+              name: toolCall.func.name,
+              arguments: JSON.stringify(toolCall.func.arguments)
+            }
+          }))
+        }
+
+        for (const toolCall of call.tools) {
+          let output: JSONValue = null;
+
+          if (toolCall.func.name === 'query_database') {
+            const query = toolCall.func.arguments.query as string
+
+            responseUI.append(
+              <>
+                <SystemMessage>
+                  SQL Query: {query}
+                </SystemMessage>
+              </>
+            )
+            output = await query_database(query, aiState)
+ 
+          } else if(toolCall.func.name === 'show_chart') {
+            const title = toolCall.func.arguments.title as string
+            const values = toolCall.func.arguments.values as { x: string[], y: number[] }
+            responseUI.append(
+              <>
+                <BotCard>
+                  <Stock props={{ symbol: "TSLA", price: 140, delta: 1 }} />
+                </BotCard>
+              </>
+            )
+
+            output = {
+              success: true,
+            }
+          }
+
+          newMessages.push({
+            tool_call_id: toolCall.id,
+            function_name: toolCall.func.name,
+            tool_call_result: JSON.stringify(output)
+          })
+        }
+
+        // Update aiState
+        aiState.update({
           ...aiState.get(),
           messages: [
             ...aiState.get().messages,
-            {
+            tool_call_message,
+            ...newMessages.map((message) => ({
               id: nanoid(),
-              role: 'assistant',
-              content
-            }
-          ]
+              role: 'tool',
+              name: message.function_name,
+              content: JSON.stringify(message.tool_call_result),
+              tool_call_id: message.tool_call_id,
+            }))
+          ] as Message[]
         })
-      } else {
-        textStream.update(delta)
+
+        return openai.chat.completions.create({
+          model,
+          stream: true,
+          messages: [
+            system_prompt,
+            ...aiState.get().messages.map((message: any) => ({
+              role: message.role,
+              content: message.content,
+              name: message.name,
+              tool_call_id: message.tool_call_id,
+              tool_calls: message.tool_calls
+            })) 
+          ] as ChatCompletionMessageParam[],
+          tools,
+          tool_choice: 'auto',
+        })
+      },
+      onCompletion(completion) {
+        // If there's textStream and textNode, nullify them.
+        if (textStream && textNode) {
+          textStream = createStreamableValue('')
+          textNode = <BotMessage content={textStream.value} />
+
+          // Append the text to aiState as assistant message.
+          aiState.update({
+            ...aiState.get(),
+            messages: [
+              ...aiState.get().messages,
+              {
+                id: nanoid(),
+                role: 'assistant',
+                content: textValue
+              }
+            ]
+          })
+          textValue = ''
+        }
+      },
+      onText(text) {
+        // This is plain text. We need to append it to the responseUI.
+        if (!textStream) {
+          textStream = createStreamableValue('')
+          textNode = <BotMessage content={textStream.value} />
+          responseUI.append(textNode)
+        }
+        textStream.update(text)
+
+        // This is for updating the aiState
+        textValue += text
+      },
+      onFinal(completion) {
+        responseUI.done()
+        aiState.done({
+          ...aiState.get(),
+        })
       }
+    })
 
-      return textNode
-    },
-    functions: {
-      listStocks: {
-        description: 'List three imaginary stocks that are trending.',
-        parameters: z.object({
-          stocks: z.array(
-            z.object({
-              symbol: z.string().describe('The symbol of the stock'),
-              price: z.number().describe('The price of the stock'),
-              delta: z.number().describe('The change in price of the stock')
-            })
-          )
-        }),
-        render: async function* ({ stocks }) {
-          yield (
-            <BotCard>
-              <StocksSkeleton />
-            </BotCard>
-          )
-
-          await sleep(1000)
-
-          aiState.done({
-            ...aiState.get(),
-            messages: [
-              ...aiState.get().messages,
-              {
-                id: nanoid(),
-                role: 'function',
-                name: 'listStocks',
-                content: JSON.stringify(stocks)
-              }
-            ]
-          })
-
-          return (
-            <BotCard>
-              <Stocks props={stocks} />
-            </BotCard>
-          )
-        }
-      },
-      showStockPrice: {
-        description:
-          'Get the current stock price of a given stock or currency. Use this to show the price to the user.',
-        parameters: z.object({
-          symbol: z
-            .string()
-            .describe(
-              'The name or symbol of the stock or currency. e.g. DOGE/AAPL/USD.'
-            ),
-          price: z.number().describe('The price of the stock.'),
-          delta: z.number().describe('The change in price of the stock')
-        }),
-        render: async function* ({ symbol, price, delta }) {
-          yield (
-            <BotCard>
-              <StockSkeleton />
-            </BotCard>
-          )
-
-          await sleep(1000)
-
-          aiState.done({
-            ...aiState.get(),
-            messages: [
-              ...aiState.get().messages,
-              {
-                id: nanoid(),
-                role: 'function',
-                name: 'showStockPrice',
-                content: JSON.stringify({ symbol, price, delta })
-              }
-            ]
-          })
-
-          return (
-            <BotCard>
-              <Stock props={{ symbol, price, delta }} />
-            </BotCard>
-          )
-        }
-      },
-      showStockPurchase: {
-        description:
-          'Show price and the UI to purchase a stock or currency. Use this if the user wants to purchase a stock or currency.',
-        parameters: z.object({
-          symbol: z
-            .string()
-            .describe(
-              'The name or symbol of the stock or currency. e.g. DOGE/AAPL/USD.'
-            ),
-          price: z.number().describe('The price of the stock.'),
-          numberOfShares: z
-            .number()
-            .describe(
-              'The **number of shares** for a stock or currency to purchase. Can be optional if the user did not specify it.'
-            )
-        }),
-        render: async function* ({ symbol, price, numberOfShares = 100 }) {
-          if (numberOfShares <= 0 || numberOfShares > 1000) {
-            aiState.done({
-              ...aiState.get(),
-              messages: [
-                ...aiState.get().messages,
-                {
-                  id: nanoid(),
-                  role: 'system',
-                  content: `[User has selected an invalid amount]`
-                }
-              ]
-            })
-
-            return <BotMessage content={'Invalid amount'} />
-          }
-
-          aiState.done({
-            ...aiState.get(),
-            messages: [
-              ...aiState.get().messages,
-              {
-                id: nanoid(),
-                role: 'function',
-                name: 'showStockPurchase',
-                content: JSON.stringify({
-                  symbol,
-                  price,
-                  numberOfShares
-                })
-              }
-            ]
-          })
-
-          return (
-            <BotCard>
-              <Purchase
-                props={{
-                  numberOfShares,
-                  symbol,
-                  price: +price,
-                  status: 'requires_action'
-                }}
-              />
-            </BotCard>
-          )
-        }
-      },
-      getEvents: {
-        description:
-          'List funny imaginary events between user highlighted dates that describe stock activity.',
-        parameters: z.object({
-          events: z.array(
-            z.object({
-              date: z
-                .string()
-                .describe('The date of the event, in ISO-8601 format'),
-              headline: z.string().describe('The headline of the event'),
-              description: z.string().describe('The description of the event')
-            })
-          )
-        }),
-        render: async function* ({ events }) {
-          yield (
-            <BotCard>
-              <EventsSkeleton />
-            </BotCard>
-          )
-
-          await sleep(1000)
-
-          aiState.done({
-            ...aiState.get(),
-            messages: [
-              ...aiState.get().messages,
-              {
-                id: nanoid(),
-                role: 'function',
-                name: 'getEvents',
-                content: JSON.stringify(events)
-              }
-            ]
-          })
-
-          return (
-            <BotCard>
-              <Events props={events} />
-            </BotCard>
-          )
-        }
+    // Start the stream
+    const reader = stream.getReader()
+    while (true) {
+      const { done } = await reader.read()
+      if (done) {
+        break
       }
     }
   })
 
   return {
     id: nanoid(),
-    display: ui
+    display: responseUI.value
   }
 }
 
@@ -515,7 +528,15 @@ export type Message = {
   role: 'user' | 'assistant' | 'system' | 'function' | 'data' | 'tool'
   content: string
   id: string
-  name?: string
+  name?: string,                   // For tool calls
+  tool_call_id?: string,
+  tool_calls?: string | ToolCall[]
+}
+
+type ToolCallResponse = {
+  tool_call_id: string;
+  function_name: string;
+  tool_call_result: JSONValue;
 }
 
 export type AIState = {
@@ -571,7 +592,10 @@ export const AI = createAI<AIState, UIState>({
       const createdAt = new Date()
       const userId = session.user.id as string
       const path = `/chat/${chatId}`
-      const title = messages[0].content.substring(0, 100)
+
+      // Get the title from the 2nd message, and truncate it to 100 characters.
+      // If there's no 2nd message, then use the first message.
+      const title = messages[1]?.content.substring(0, 100) || messages[0].content.substring(0, 100)
 
       const chat: Chat = {
         id: chatId,
@@ -593,34 +617,37 @@ export const AI = createAI<AIState, UIState>({
 
 export const getUIStateFromAIState = (aiState: Chat) => {
   return aiState.messages
-    .filter(message => message.role !== 'system')
+    .filter(message => (message.role !== 'system' && message.role !== 'tool'))
     .map((message, index) => ({
       id: `${aiState.chatId}-${index}`,
       databaseUrl: aiState.databaseUrl,
       databaseAuthToken: aiState.databaseAuthToken,
-      display:
-        message.role === 'function' ? (
-          message.name === 'listStocks' ? (
-            <BotCard>
-              <Stocks props={JSON.parse(message.content)} />
-            </BotCard>
-          ) : message.name === 'showStockPrice' ? (
-            <BotCard>
-              <Stock props={JSON.parse(message.content)} />
-            </BotCard>
-          ) : message.name === 'showStockPurchase' ? (
-            <BotCard>
-              <Purchase props={JSON.parse(message.content)} />
-            </BotCard>
-          ) : message.name === 'getEvents' ? (
-            <BotCard>
-              <Events props={JSON.parse(message.content)} />
-            </BotCard>
-          ) : null
-        ) : message.role === 'user' ? (
-          <UserMessage>{message.content}</UserMessage>
-        ) : (
-          <BotMessage content={message.content} />
-        )
+      display: getDisplayComponent(message)
     }))
 }
+
+const getDisplayComponent = (message: Message) => {
+  switch (message.role) {
+    case 'user':
+      return <UserMessage>{message.content}</UserMessage>
+    case 'assistant':
+      // If the message has tool_calls, then show the tool and the parameter:
+      if (message.tool_calls) {
+        const toolCalls = typeof message.tool_calls === 'string' ? JSON.parse(message.tool_calls) : message.tool_calls
+        return toolCalls.map((toolCall: ToolCall) => {
+          if (toolCall.function.name == 'query_database') {
+            const args = JSON.parse(toolCall.function.arguments)
+            return <SystemMessage>SQL Query: {args.query}</SystemMessage>
+          } else if (toolCall.function.name == 'show_chart') {
+            return <BotCard>
+              <Stock props={{ symbol: "TSLA", price: 140, delta: 1 }} />
+            </BotCard>
+          }
+        })
+      }
+      return <BotMessage content={message.content} />
+    default:
+      console.log('Unknown message role:', message.role)
+      return null
+  }
+};
