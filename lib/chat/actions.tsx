@@ -256,7 +256,6 @@ async function confirmPurchase(symbol: string, price: number, amount: number) {
 
 const system_prompt = {
   role: 'system',
-  name: 'system_prompt', // This is just there to satisfy TypeScript. Fuck you, TypeScript
   content: dedent`
     You are a data analyst with access to a SQL DB. Your task is to answer users question using
     the data from the database. Query the SQLite database and then answer questions or show the charts,
@@ -356,7 +355,7 @@ async function submitUserMessage(content: string) {
     stream: true,
     messages: [
       system_prompt,
-      ...aiState.get().messages.map((message: any) => ({
+      ...aiState.get().messages.map((message: Message) => ({
         role: message.role,
         content: message.content,
         name: message.name,
@@ -455,7 +454,7 @@ async function submitUserMessage(content: string) {
           stream: true,
           messages: [
             system_prompt,
-            ...aiState.get().messages.map((message: any) => ({
+            ...aiState.get().messages.map((message: Message) => ({
               role: message.role,
               content: message.content,
               name: message.name,
@@ -637,11 +636,13 @@ const getDisplayComponent = (message: Message) => {
         return toolCalls.map((toolCall: ToolCall) => {
           if (toolCall.function.name == 'query_database') {
             const args = JSON.parse(toolCall.function.arguments)
-            return <SystemMessage>SQL Query: {args.query}</SystemMessage>
+            return (<SystemMessage key={toolCall.id}>SQL Query: {args.query}</SystemMessage>)
           } else if (toolCall.function.name == 'show_chart') {
-            return <BotCard>
-              <Stock props={{ symbol: "TSLA", price: 140, delta: 1 }} />
-            </BotCard>
+            return (
+              <BotCard key={toolCall.id}>
+                <Stock props={{ symbol: "TSLA", price: 140, delta: 1 }} />
+              </BotCard>
+            )
           }
         })
       }
