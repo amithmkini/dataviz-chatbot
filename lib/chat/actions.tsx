@@ -469,8 +469,8 @@ async function submitUserMessage(content: string) {
       onCompletion(completion) {
         // If there's textStream and textNode, nullify them.
         if (textStream && textNode) {
-          textStream = createStreamableValue('')
-          textNode = <BotMessage content={textStream.value} />
+          textStream = undefined
+          textNode = undefined
 
           // Append the text to aiState as assistant message.
           aiState.update({
