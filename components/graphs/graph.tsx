@@ -13,9 +13,9 @@ interface GraphProps {
 }
 
 const GraphComponent: React.FC<GraphProps> = ({ label1, label2, x, y1, y2, type }) => {
-  const chartRef = useRef<Chart | null>(null);
+  const chartRef = useRef<Chart<any> | null>(null);
 
-  const data = useMemo(() => ({
+  const data = useMemo<any>(() => ({
     labels: x,
     datasets: [
       {
@@ -33,7 +33,7 @@ const GraphComponent: React.FC<GraphProps> = ({ label1, label2, x, y1, y2, type 
     ].filter(Boolean),
   }), [x, y1, y2, label1, label2]);
 
-  const options = useMemo(() => ({
+  const options = useMemo<any>(() => ({
     scales: {
       y1: {
         type: 'linear',
@@ -79,7 +79,7 @@ const GraphComponent: React.FC<GraphProps> = ({ label1, label2, x, y1, y2, type 
   return (
     <div>
       <h1>{`${label1}${label2 ? `, ${label2}` : ''} Chart`}</h1>
-      <div style={{ width: '80%', height: '500px', margin: '0 auto' }}>
+      <div className='flex p-4 border justify-center'>
         {type === 'line' && (
           <Line data={data} options={options} ref={chartRef} />
         )}
