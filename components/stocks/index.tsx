@@ -8,7 +8,7 @@ import { EventsSkeleton } from './events-skeleton'
 export { spinner } from './spinner'
 export { BotCard, BotMessage, SystemMessage } from './message'
 
-const Stock = dynamic(() => import('./stock').then(mod => mod.Stock), {
+const Stock = dynamic(() => import('./chart').then(mod => mod.Stock), {
   ssr: false,
   loading: () => <StockSkeleton />
 })
