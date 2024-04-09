@@ -17,9 +17,9 @@ import {
   BotCard,
   BotMessage,
   SystemMessage,
-  Stock,
 } from '@/components/stocks'
 
+import { LineBarGraph } from '@/components/graphs'
 
 import {
   formatNumber,
@@ -29,7 +29,7 @@ import {
 } from '@/lib/utils'
 import { saveChat } from '@/app/actions'
 import { SpinnerMessage, UserMessage } from '@/components/stocks/message'
-import { Chat } from '@/lib/types'
+import { Chat, LineBarGraphProps } from '@/lib/types'
 import { auth } from '@/auth'
 import { ChatCompletionMessageParam } from 'openai/resources';
 import { JSONValue, OpenAIStream, Tool, ToolCall, ToolCallPayload } from 'ai';
@@ -295,39 +295,83 @@ const tools: Tool[] = [
       description: 'Show a bar chart',
       parameters: {
         type: 'object',
+        description: dedent`
+          The x-axis and y-axis values. Should be of the format:
+          {
+            "title": "Chart title",
+            "x": {
+              data: ["A", "B", "C"],
+              label: "X-axis"
+            },
+            "y1": {
+              data: [1, 2, 3],
+              label: "Y-axis 1"
+            },
+            "y2": {
+              data: [4, 5, 6],
+              label: "Y-axis 2"
+            }
+          }
+        `,
         properties: {
           title: {
             type: 'string',
             description: 'The title of the chart.'
           },
-          values: {
+          type: {
+            type: 'string',
+            description: 'The type of the chart (line or bar).'
+          },
+          x: {
             type: 'object',
-            description: dedent`
-              The x-axis and y-axis values. Should be of the format:
-              {
-                "x": ["A", "B", "C"],
-                "y": [1, 2, 3]
-              }
-            `,
+            descrption: 'The x-axis values.',
             properties: {
-              x: {
+              data: {
                 type: 'array',
-                descrption: 'The x-axis values.',
                 items: {
                   type: 'string'
                 }
               },
-              y: {
+              label: {
+                type: 'string'
+              }
+            },
+            required: ['data', 'label']
+          },
+          y1: {
+            type: 'object',
+            descrption: 'The y-axis values (left).',
+            properties: {
+              data: {
                 type: 'array',
-                description: 'The y-axis values.',
                 items: {
                   type: 'number'
                 }
+              },
+              label: {
+                type: 'string'
               }
-            }
+            },
+            required: ['data', 'label']
+          },
+          y2: {
+            type: 'object',
+            descrption: 'The y-axis values (right).',
+            properties: {
+              data: {
+                type: 'array',
+                items: {
+                  type: 'number'
+                }
+              },
+              label: {
+                type: 'string'
+              }
+            },
+            required: ['data', 'label']
           },
         },
-        required: ['title', 'values']
+        required: ['title', 'type', 'x', 'y1']
       }
     }
   }
@@ -411,12 +455,11 @@ async function submitUserMessage(content: string) {
             output = await query_database(query, aiState)
  
           } else if(toolCall.func.name === 'show_chart') {
-            const title = toolCall.func.arguments.title as string
-            const values = toolCall.func.arguments.values as { x: string[], y: number[] }
+            const props = toolCall.func.arguments as unknown as LineBarGraphProps
             responseUI.append(
               <>
                 <BotCard>
-                  <Stock props={{ symbol: "TSLA", price: 140, delta: 1 }} />
+                  <LineBarGraph props={props} />
                 </BotCard>
               </>
             )
@@ -638,9 +681,10 @@ const getDisplayComponent = (message: Message) => {
             const args = JSON.parse(toolCall.function.arguments)
             return (<SystemMessage key={toolCall.id}>SQL Query: {args.query}</SystemMessage>)
           } else if (toolCall.function.name == 'show_chart') {
+            const props = JSON.parse(toolCall.function.arguments) as LineBarGraphProps
             return (
               <BotCard key={toolCall.id}>
-                <Stock props={{ symbol: "TSLA", price: 140, delta: 1 }} />
+                <LineBarGraph props={props} />
               </BotCard>
             )
           }

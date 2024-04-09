@@ -1,50 +1,56 @@
 import React, { useRef, useEffect, useMemo } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
 import { Chart, registerables } from 'chart.js';
+import type { ChartData, ChartDataset, ChartOptions } from 'chart.js';
+import { LineBarGraphProps } from '@/lib/types';
 Chart.register(...registerables);
 
-interface GraphProps {
-  label1: string;
-  label2?: string;
-  x: string[];
-  y1: number[];
-  y2?: number[];
-  type: 'line' | 'bar';
-}
+type LineOrBarData = ChartData<'line'> | ChartData<'bar'>;
+type LineOrBarOptions = ChartOptions<'line'> | ChartOptions<'bar'>;
 
-const GraphComponent: React.FC<GraphProps> = ({ label1, label2, x, y1, y2, type }) => {
+
+export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: LineBarGraphProps }) {
   const chartRef = useRef<Chart<any> | null>(null);
 
-  const data = useMemo<any>(() => ({
-    labels: x,
+  const data = useMemo<LineOrBarData>(() => ({
+    labels: x.data,
     datasets: [
       {
-        label: label1,
-        data: y1,
+        label: y1.label,
+        data: y1.data,
         yAxisID: 'y1',
       },
       y2
         ? {
-            label: label2,
-            data: y2,
+            label: y2.label,
+            data: y2.data,
             yAxisID: 'y2',
           }
         : null,
-    ].filter(Boolean),
-  }), [x, y1, y2, label1, label2]);
+    ].filter(Boolean) as ChartDataset<'line'>[],
+  }), [x, y1, y2]);
 
-  const options = useMemo<any>(() => ({
+  const options = useMemo<LineOrBarOptions>(() => ({
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+      },
+      title: {
+        display: true,
+        text: title,
+      },
+    },
     scales: {
       y1: {
         type: 'linear',
         display: true,
         position: 'left',
         beginAtZero: false,
-        min: Math.min(...y1) - 1,
-        max: Math.max(...y1) + 1,
+        min: Math.min(...y1.data) - 1,
+        max: Math.max(...y1.data) + 1,
         title: {
           display: true,
-          text: label1,
+          text: y1.label,
         },
       },
       y2: {
@@ -52,21 +58,21 @@ const GraphComponent: React.FC<GraphProps> = ({ label1, label2, x, y1, y2, type 
         display: y2 ? true : false,
         position: 'right',
         beginAtZero: false,
-        min: y2 ? Math.min(...y2) - 1 : undefined,
-        max: y2 ? Math.max(...y2) + 1 : undefined,
+        min: y2 ? Math.min(...y2.data) - 1 : undefined,
+        max: y2 ? Math.max(...y2.data) + 1 : undefined,
         title: {
           display: y2 ? true : false,
-          text: label2,
+          text: y2?.label,
         },
       },
       x: {
         title: {
           display: true,
-          text: 'Date',
+          text: x.label,
         },
       },
     },
-  }), [label1, label2, y1, y2]);
+  }), [x, y1, y2, title]);
 
   useEffect(() => {
     if (chartRef.current) {
@@ -78,17 +84,22 @@ const GraphComponent: React.FC<GraphProps> = ({ label1, label2, x, y1, y2, type 
 
   return (
     <div>
-      <h1>{`${label1}${label2 ? `, ${label2}` : ''} Chart`}</h1>
       <div className='flex p-4 border justify-center'>
         {type === 'line' && (
-          <Line data={data} options={options} ref={chartRef} />
+          <Line 
+            data={data as ChartData<'line'>}
+            options={options as ChartOptions<'line'>}
+            ref={chartRef} />
         )}
         {type === 'bar' && (
-          <Bar data={data} options={options} ref={chartRef} />
+          <Bar 
+            data={data as ChartData<'bar'>}
+            options={options as ChartOptions<'bar'>}
+            ref={chartRef} />
         )}
       </div>
     </div>
   );
 };
 
-export default GraphComponent;
+export default LineBarGraph;
