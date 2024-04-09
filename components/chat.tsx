@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { useUIState, useAIState } from 'ai/rsc'
 import { Session } from '@/lib/types'
 import { usePathname, useRouter } from 'next/navigation'
-import { Message } from '@/lib/chat/actions'
+import { Message } from 'ai'
 import { useScrollAnchor } from '@/lib/hooks/use-scroll-anchor'
 import { toast } from 'sonner'
 import DatabaseInput from './database-input'
@@ -39,7 +39,7 @@ export function Chat({ id, className, session, missingKeys }: ChatProps) {
 
   useEffect(() => {
     const messagesLength = aiState.messages?.length
-    if (messagesLength === 2) {
+    if (messagesLength === 4) {
       router.refresh()
     }
   }, [aiState.messages, router])

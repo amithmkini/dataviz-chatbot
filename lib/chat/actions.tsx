@@ -1,6 +1,13 @@
 import 'server-only'
 
-import { createClient, LibsqlError, ResultSet } from "@libsql/client/web";
+import { 
+  JSONValue,
+  OpenAIStream,
+  Tool,
+  ToolCall,
+  ToolCallPayload,
+  Message
+} from 'ai'
 import {
   createAI,
   createStreamableUI,
@@ -8,31 +15,38 @@ import {
   getAIState,
   createStreamableValue
 } from 'ai/rsc'
-import OpenAI from 'openai'
 import dedent from 'dedent'
+import { createClient, LibsqlError, ResultSet } from '@libsql/client/web'
+import OpenAI from 'openai'
+import { ChatCompletionMessageParam } from 'openai/resources'
 import { kv } from '@vercel/kv'
 
+import { saveChat } from '@/app/actions'
+import { auth } from '@/auth'
+import { LineBarGraph } from '@/components/graphs'
 import {
   spinner,
   BotCard,
   BotMessage,
   SystemMessage,
 } from '@/components/stocks'
-
-import { LineBarGraph } from '@/components/graphs'
-
+import { UserMessage } from '@/components/stocks/message'
+import { 
+  Chat,
+  LineBarGraphProps,
+  AIState,
+  UIState,
+  ToolCallResponse
+} from '@/lib/types'
 import {
   formatNumber,
   runAsyncFnWithoutBlocking,
   sleep,
   nanoid
 } from '@/lib/utils'
-import { saveChat } from '@/app/actions'
-import { SpinnerMessage, UserMessage } from '@/components/stocks/message'
-import { Chat, LineBarGraphProps } from '@/lib/types'
-import { auth } from '@/auth'
-import { ChatCompletionMessageParam } from 'openai/resources';
-import { JSONValue, OpenAIStream, Tool, ToolCall, ToolCallPayload } from 'ai';
+
+import { query_database_func, show_chart_func } from './schemas'
+import { system_prompt } from './prompt'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
@@ -254,126 +268,14 @@ async function confirmPurchase(symbol: string, price: number, amount: number) {
   }
 }
 
-const system_prompt = {
-  role: 'system',
-  content: dedent`
-    You are a data analyst with access to a SQL DB. Your task is to answer users question using
-    the data from the database. Query the SQLite database and then answer questions or show the charts,
-    using the data.
-
-    The database schema is given to you as [Database schema] <schema>. If it's not given, mention that
-    you don't have the schema.
-
-    If the users ask you run a SQL query for something, call \`query_database\` to get the results.
-    If you want to draw a bar chart, call \`show_chart\` with the title and values.
-
-    Besides that, you can also chat with users and do some calculations if needed.`
-}
-
 const tools: Tool[] = [
   {
     type: 'function',
-    function: {
-      name: 'query_database',
-      description: 'Query the database with a SQL query.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'The SQL query to run on the database.'
-          }
-        },
-        required: ['query']
-      }
-    }
+    function: query_database_func,
   },
   {
     type: 'function',
-    function: {
-      name: 'show_chart',
-      description: 'Show a bar chart',
-      parameters: {
-        type: 'object',
-        description: dedent`
-          The x-axis and y-axis values. Should be of the format:
-          {
-            "title": "Chart title",
-            "x": {
-              data: ["A", "B", "C"],
-              label: "X-axis"
-            },
-            "y1": {
-              data: [1, 2, 3],
-              label: "Y-axis 1"
-            },
-            "y2": {
-              data: [4, 5, 6],
-              label: "Y-axis 2"
-            }
-          }
-        `,
-        properties: {
-          title: {
-            type: 'string',
-            description: 'The title of the chart.'
-          },
-          type: {
-            type: 'string',
-            description: 'The type of the chart (line or bar).'
-          },
-          x: {
-            type: 'object',
-            descrption: 'The x-axis values.',
-            properties: {
-              data: {
-                type: 'array',
-                items: {
-                  type: 'string'
-                }
-              },
-              label: {
-                type: 'string'
-              }
-            },
-            required: ['data', 'label']
-          },
-          y1: {
-            type: 'object',
-            descrption: 'The y-axis values (left).',
-            properties: {
-              data: {
-                type: 'array',
-                items: {
-                  type: 'number'
-                }
-              },
-              label: {
-                type: 'string'
-              }
-            },
-            required: ['data', 'label']
-          },
-          y2: {
-            type: 'object',
-            descrption: 'The y-axis values (right).',
-            properties: {
-              data: {
-                type: 'array',
-                items: {
-                  type: 'number'
-                }
-              },
-              label: {
-                type: 'string'
-              }
-            },
-            required: ['data', 'label']
-          },
-        },
-        required: ['title', 'type', 'x', 'y1']
-      }
-    }
+    function: show_chart_func,
   }
 ]
 
@@ -412,6 +314,13 @@ async function submitUserMessage(content: string) {
   })
 
   const responseUI = createStreamableUI(<></>)
+  const spinnerUI = createStreamableUI(spinner)
+  const spinnerWithResponseUI = createStreamableUI(
+    <>
+      {responseUI.value}
+      {spinnerUI.value}
+    </>
+  )
 
   runAsyncFnWithoutBlocking(async () => {
     let textStream: undefined | ReturnType<typeof createStreamableValue<string>>
@@ -455,7 +364,8 @@ async function submitUserMessage(content: string) {
             output = await query_database(query, aiState)
  
           } else if(toolCall.func.name === 'show_chart') {
-            const props = toolCall.func.arguments as unknown as LineBarGraphProps
+            const props = 
+              toolCall.func.arguments as unknown as LineBarGraphProps
             responseUI.append(
               <>
                 <BotCard>
@@ -510,8 +420,12 @@ async function submitUserMessage(content: string) {
         })
       },
       onCompletion(completion) {
-        // If there's textStream and textNode, nullify them.
         if (textStream && textNode) {
+          // IMP: Call done so that you don't get harrassed by the logs
+          textStream.done()
+
+          // Unset so that we can reuse the variables in the 
+          // next iteration.
           textStream = undefined
           textNode = undefined
 
@@ -544,6 +458,8 @@ async function submitUserMessage(content: string) {
       },
       onFinal(completion) {
         responseUI.done()
+        spinnerUI.done(<></>)
+        spinnerWithResponseUI.done()
         aiState.done({
           ...aiState.get(),
         })
@@ -562,38 +478,10 @@ async function submitUserMessage(content: string) {
 
   return {
     id: nanoid(),
-    display: responseUI.value
+    display: spinnerWithResponseUI.value
   }
 }
 
-export type Message = {
-  role: 'user' | 'assistant' | 'system' | 'function' | 'data' | 'tool'
-  content: string
-  id: string
-  name?: string,                   // For tool calls
-  tool_call_id?: string,
-  tool_calls?: string | ToolCall[]
-}
-
-type ToolCallResponse = {
-  tool_call_id: string;
-  function_name: string;
-  tool_call_result: JSONValue;
-}
-
-export type AIState = {
-  chatId: string
-  databaseUrl: string
-  databaseAuthToken: string
-  messages: Message[]
-}
-
-export type UIState = {
-  id: string
-  databaseUrl: string
-  databaseAuthToken: string
-  display: React.ReactNode
-}[]
 
 export const AI = createAI<AIState, UIState>({
   actions: {
