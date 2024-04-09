@@ -53,6 +53,7 @@ const openai = new OpenAI({
 })
 
 const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo'
+const temperature: number =  +(process.env.OPENAI_MODEL_TEMPERATURE || 0.5)
 
 async function filter_schema(output: ResultSet) {
   // We need to get all the SQL from the rows list.Since we are simply reading 
@@ -77,6 +78,7 @@ async function filter_schema(output: ResultSet) {
 
   const completion = await openai.chat.completions.create({
     model: "gpt-3.5-turbo",
+    temperature,
     messages: [
       {
         role: "system",
@@ -298,6 +300,7 @@ async function submitUserMessage(content: string) {
 
   const response = await openai.chat.completions.create({
     model,
+    temperature,
     stream: true,
     messages: [
       system_prompt,
@@ -404,6 +407,7 @@ async function submitUserMessage(content: string) {
 
         return openai.chat.completions.create({
           model,
+          temperature,
           stream: true,
           messages: [
             system_prompt,
