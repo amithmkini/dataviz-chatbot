@@ -55,8 +55,6 @@ export default function DatabaseInput() {
                 ref={formRef}
                 onSubmit={async (e: any) => {
                   e.preventDefault()
-                  console.log('Database URL:', databaseUrl)
-                  console.log('Database Auth Token:', databaseAuthToken)
                   setsubmitDisabled(true)
                   const response = await setDatabaseCreds(databaseUrl, databaseAuthToken);
                   if (response.success) {
