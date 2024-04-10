@@ -31,7 +31,7 @@ export function Chat({ id, className, session, missingKeys }: ChatProps) {
 
   useEffect(() => {
     if (session?.user) {
-      if (!path.includes('chat') && messages.length === 1) {
+      if (!path.includes('chat') && messages.length === 2) {
         window.history.replaceState({}, '', `/chat/${id}`)
       }
     }
@@ -39,7 +39,11 @@ export function Chat({ id, className, session, missingKeys }: ChatProps) {
 
   useEffect(() => {
     const messagesLength = aiState.messages?.length
-    if (messagesLength >= 4) {
+    if (
+      messagesLength >= 4 && messagesLength <= 8 &&
+      path.includes('chat') && !path.includes('share') &&
+      aiState.messages[messagesLength - 1].role === 'assistant'
+    ) {
       router.refresh()
     }
   }, [aiState.messages, router])

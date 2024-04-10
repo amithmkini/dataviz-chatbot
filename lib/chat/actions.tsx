@@ -31,6 +31,7 @@ import {
   SystemMessage,
 } from '@/components/stocks'
 import { UserMessage } from '@/components/stocks/message'
+import { Separator } from '@/components/ui/separator'
 import { 
   Chat,
   LineBarGraphProps,
@@ -362,6 +363,7 @@ async function submitUserMessage(content: string) {
                 <SystemMessage>
                   SQL Query: {query}
                 </SystemMessage>
+                <Separator className='my-4' />
               </>
             )
             output = await query_database(query, aiState)
@@ -374,6 +376,7 @@ async function submitUserMessage(content: string) {
                 <BotCard>
                   <LineBarGraph props={props} />
                 </BotCard>
+                <Separator className='my-4' />
               </>
             )
 
@@ -460,14 +463,6 @@ async function submitUserMessage(content: string) {
         // This is for updating the aiState
         textValue += text
       },
-      onFinal(completion) {
-        responseUI.done()
-        spinnerUI.done(<></>)
-        spinnerWithResponseUI.done()
-        aiState.done({
-          ...aiState.get(),
-        })
-      }
     })
 
     // Start the stream
@@ -475,6 +470,13 @@ async function submitUserMessage(content: string) {
     while (true) {
       const { done } = await reader.read()
       if (done) {
+        // Cleanup. Close streaming UIs.
+        responseUI.done()
+        spinnerUI.done(<></>)
+        spinnerWithResponseUI.done()
+        aiState.done({
+          ...aiState.get(),
+        })
         break
       }
     }
@@ -529,7 +531,10 @@ export const AI = createAI<AIState, UIState>({
 
       // Get the title from the 2nd message, and truncate it to 100 characters.
       // If there's no 2nd message, then use the first message.
-      const title = messages[1]?.content.substring(0, 100) || messages[0].content.substring(0, 100)
+      const title = (
+        messages[1]?.content.substring(0, 100) ||
+        messages[0].content.substring(0, 100)
+      )
 
       const chat: Chat = {
         id: chatId,
