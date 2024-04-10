@@ -2,10 +2,11 @@ import { type Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { formatDate } from '@/lib/utils'
+import { UIState } from '@/lib/types'
 import { getSharedChat } from '@/app/actions'
 import { ChatList } from '@/components/chat-list'
 import { FooterText } from '@/components/footer'
-import { AI, UIState, getUIStateFromAIState } from '@/lib/chat/actions'
+import { AI, getUIStateFromAIState } from '@/lib/chat/actions'
 
 export const runtime = 'edge'
 export const preferredRegion = 'home'

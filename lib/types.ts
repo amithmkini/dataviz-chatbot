@@ -1,4 +1,4 @@
-import { Message } from 'ai'
+import { JSONValue, Message } from 'ai'
 
 export interface Chat extends Record<string, any> {
   id: string
@@ -37,3 +37,41 @@ export interface User extends Record<string, any> {
   password: string
   salt: string
 }
+
+export interface LineBarGraphProps {
+  title: string
+  type: 'line' | 'bar'
+  x: {
+    label: string
+    data: string[]
+  }
+  y1: {
+    label: string
+    data: number[]
+  }
+  y2?: {
+    label: string
+    data: number[]
+  }
+}
+
+// ai/rsc types
+export type ToolCallResponse = {
+  tool_call_id: string;
+  function_name: string;
+  tool_call_result: JSONValue;
+}
+
+export type AIState = {
+  chatId: string
+  databaseUrl: string
+  databaseAuthToken: string
+  messages: Message[]
+}
+
+export type UIState = {
+  id: string
+  databaseUrl: string
+  databaseAuthToken: string
+  display: React.ReactNode
+}[]

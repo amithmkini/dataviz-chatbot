@@ -8,11 +8,6 @@ import { EventsSkeleton } from './events-skeleton'
 export { spinner } from './spinner'
 export { BotCard, BotMessage, SystemMessage } from './message'
 
-const Stock = dynamic(() => import('./chart').then(mod => mod.Stock), {
-  ssr: false,
-  loading: () => <StockSkeleton />
-})
-
 const Purchase = dynamic(
   () => import('./stock-purchase').then(mod => mod.Purchase),
   {
@@ -33,4 +28,4 @@ const Events = dynamic(() => import('./events').then(mod => mod.Events), {
   loading: () => <EventsSkeleton />
 })
 
-export { Stock, Purchase, Stocks, Events }
+export { Purchase, Stocks, Events }

@@ -1,6 +1,13 @@
 import 'server-only'
 
-import { createClient, LibsqlError, ResultSet } from "@libsql/client/web";
+import { 
+  JSONValue,
+  OpenAIStream,
+  Tool,
+  ToolCall,
+  ToolCallPayload,
+  Message
+} from 'ai'
 import {
   createAI,
   createStreamableUI,
@@ -8,37 +15,46 @@ import {
   getAIState,
   createStreamableValue
 } from 'ai/rsc'
-import OpenAI from 'openai'
 import dedent from 'dedent'
+import { createClient, LibsqlError, ResultSet } from '@libsql/client/web'
+import OpenAI from 'openai'
+import { ChatCompletionMessageParam } from 'openai/resources'
 import { kv } from '@vercel/kv'
 
+import { saveChat } from '@/app/actions'
+import { auth } from '@/auth'
+import { LineBarGraph } from '@/components/graphs'
 import {
   spinner,
   BotCard,
   BotMessage,
   SystemMessage,
-  Stock,
 } from '@/components/stocks'
-
-
+import { UserMessage } from '@/components/stocks/message'
+import { Separator } from '@/components/ui/separator'
+import { 
+  Chat,
+  LineBarGraphProps,
+  AIState,
+  UIState,
+  ToolCallResponse
+} from '@/lib/types'
 import {
   formatNumber,
   runAsyncFnWithoutBlocking,
   sleep,
   nanoid
 } from '@/lib/utils'
-import { saveChat } from '@/app/actions'
-import { SpinnerMessage, UserMessage } from '@/components/stocks/message'
-import { Chat } from '@/lib/types'
-import { auth } from '@/auth'
-import { ChatCompletionMessageParam } from 'openai/resources';
-import { JSONValue, OpenAIStream, Tool, ToolCall, ToolCallPayload } from 'ai';
+
+import { query_database_func, show_chart_func } from './schemas'
+import { system_prompt } from './prompt'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
 })
 
 const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo'
+const temperature: number =  +(process.env.OPENAI_MODEL_TEMPERATURE || 0.5)
 
 async function filter_schema(output: ResultSet) {
   // We need to get all the SQL from the rows list.Since we are simply reading 
@@ -63,6 +79,7 @@ async function filter_schema(output: ResultSet) {
 
   const completion = await openai.chat.completions.create({
     model: "gpt-3.5-turbo",
+    temperature,
     messages: [
       {
         role: "system",
@@ -254,82 +271,14 @@ async function confirmPurchase(symbol: string, price: number, amount: number) {
   }
 }
 
-const system_prompt = {
-  role: 'system',
-  content: dedent`
-    You are a data analyst with access to a SQL DB. Your task is to answer users question using
-    the data from the database. Query the SQLite database and then answer questions or show the charts,
-    using the data.
-
-    The database schema is given to you as [Database schema] <schema>. If it's not given, mention that
-    you don't have the schema.
-
-    If the users ask you run a SQL query for something, call \`query_database\` to get the results.
-    If you want to draw a bar chart, call \`show_chart\` with the title and values.
-
-    Besides that, you can also chat with users and do some calculations if needed.`
-}
-
 const tools: Tool[] = [
   {
     type: 'function',
-    function: {
-      name: 'query_database',
-      description: 'Query the database with a SQL query.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'The SQL query to run on the database.'
-          }
-        },
-        required: ['query']
-      }
-    }
+    function: query_database_func,
   },
   {
     type: 'function',
-    function: {
-      name: 'show_chart',
-      description: 'Show a bar chart',
-      parameters: {
-        type: 'object',
-        properties: {
-          title: {
-            type: 'string',
-            description: 'The title of the chart.'
-          },
-          values: {
-            type: 'object',
-            description: dedent`
-              The x-axis and y-axis values. Should be of the format:
-              {
-                "x": ["A", "B", "C"],
-                "y": [1, 2, 3]
-              }
-            `,
-            properties: {
-              x: {
-                type: 'array',
-                descrption: 'The x-axis values.',
-                items: {
-                  type: 'string'
-                }
-              },
-              y: {
-                type: 'array',
-                description: 'The y-axis values.',
-                items: {
-                  type: 'number'
-                }
-              }
-            }
-          },
-        },
-        required: ['title', 'values']
-      }
-    }
+    function: show_chart_func,
   }
 ]
 
@@ -352,6 +301,7 @@ async function submitUserMessage(content: string) {
 
   const response = await openai.chat.completions.create({
     model,
+    temperature,
     stream: true,
     messages: [
       system_prompt,
@@ -368,6 +318,13 @@ async function submitUserMessage(content: string) {
   })
 
   const responseUI = createStreamableUI(<></>)
+  const spinnerUI = createStreamableUI(spinner)
+  const spinnerWithResponseUI = createStreamableUI(
+    <>
+      {responseUI.value}
+      {spinnerUI.value}
+    </>
+  )
 
   runAsyncFnWithoutBlocking(async () => {
     let textStream: undefined | ReturnType<typeof createStreamableValue<string>>
@@ -406,18 +363,20 @@ async function submitUserMessage(content: string) {
                 <SystemMessage>
                   SQL Query: {query}
                 </SystemMessage>
+                <Separator className='my-4' />
               </>
             )
             output = await query_database(query, aiState)
  
           } else if(toolCall.func.name === 'show_chart') {
-            const title = toolCall.func.arguments.title as string
-            const values = toolCall.func.arguments.values as { x: string[], y: number[] }
+            const props = 
+              toolCall.func.arguments as unknown as LineBarGraphProps
             responseUI.append(
               <>
                 <BotCard>
-                  <Stock props={{ symbol: "TSLA", price: 140, delta: 1 }} />
+                  <LineBarGraph props={props} />
                 </BotCard>
+                <Separator className='my-4' />
               </>
             )
 
@@ -451,6 +410,7 @@ async function submitUserMessage(content: string) {
 
         return openai.chat.completions.create({
           model,
+          temperature,
           stream: true,
           messages: [
             system_prompt,
@@ -467,8 +427,12 @@ async function submitUserMessage(content: string) {
         })
       },
       onCompletion(completion) {
-        // If there's textStream and textNode, nullify them.
         if (textStream && textNode) {
+          // IMP: Call done so that you don't get harrassed by the logs
+          textStream.done()
+
+          // Unset so that we can reuse the variables in the 
+          // next iteration.
           textStream = undefined
           textNode = undefined
 
@@ -499,12 +463,6 @@ async function submitUserMessage(content: string) {
         // This is for updating the aiState
         textValue += text
       },
-      onFinal(completion) {
-        responseUI.done()
-        aiState.done({
-          ...aiState.get(),
-        })
-      }
     })
 
     // Start the stream
@@ -512,6 +470,13 @@ async function submitUserMessage(content: string) {
     while (true) {
       const { done } = await reader.read()
       if (done) {
+        // Cleanup. Close streaming UIs.
+        responseUI.done()
+        spinnerUI.done(<></>)
+        spinnerWithResponseUI.done()
+        aiState.done({
+          ...aiState.get(),
+        })
         break
       }
     }
@@ -519,38 +484,10 @@ async function submitUserMessage(content: string) {
 
   return {
     id: nanoid(),
-    display: responseUI.value
+    display: spinnerWithResponseUI.value
   }
 }
 
-export type Message = {
-  role: 'user' | 'assistant' | 'system' | 'function' | 'data' | 'tool'
-  content: string
-  id: string
-  name?: string,                   // For tool calls
-  tool_call_id?: string,
-  tool_calls?: string | ToolCall[]
-}
-
-type ToolCallResponse = {
-  tool_call_id: string;
-  function_name: string;
-  tool_call_result: JSONValue;
-}
-
-export type AIState = {
-  chatId: string
-  databaseUrl: string
-  databaseAuthToken: string
-  messages: Message[]
-}
-
-export type UIState = {
-  id: string
-  databaseUrl: string
-  databaseAuthToken: string
-  display: React.ReactNode
-}[]
 
 export const AI = createAI<AIState, UIState>({
   actions: {
@@ -594,7 +531,10 @@ export const AI = createAI<AIState, UIState>({
 
       // Get the title from the 2nd message, and truncate it to 100 characters.
       // If there's no 2nd message, then use the first message.
-      const title = messages[1]?.content.substring(0, 100) || messages[0].content.substring(0, 100)
+      const title = (
+        messages[1]?.content.substring(0, 100) ||
+        messages[0].content.substring(0, 100)
+      )
 
       const chat: Chat = {
         id: chatId,
@@ -638,9 +578,10 @@ const getDisplayComponent = (message: Message) => {
             const args = JSON.parse(toolCall.function.arguments)
             return (<SystemMessage key={toolCall.id}>SQL Query: {args.query}</SystemMessage>)
           } else if (toolCall.function.name == 'show_chart') {
+            const props = JSON.parse(toolCall.function.arguments) as LineBarGraphProps
             return (
               <BotCard key={toolCall.id}>
-                <Stock props={{ symbol: "TSLA", price: 140, delta: 1 }} />
+                <LineBarGraph props={props} />
               </BotCard>
             )
           }
