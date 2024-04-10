@@ -49,6 +49,9 @@ import {
 import { query_database_func, show_chart_func } from './schemas'
 import { system_prompt } from './prompt'
 
+export const runtime = 'edge'
+export const preferredRegion = 'home'
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
 })
