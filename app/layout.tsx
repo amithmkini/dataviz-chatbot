@@ -16,8 +16,8 @@ export const metadata = {
     ? new URL(`https://${process.env.VERCEL_URL}`)
     : undefined,
   title: {
-    default: 'Dataviz Chatbot',
-    template: `%s - Dataviz Chatbot`
+    default: 'DataViz Chatbot',
+    template: `%s - DataViz Chatbot`
   },
   description: 'An AI-powered chatbot powered by database queries.',
   icons: {

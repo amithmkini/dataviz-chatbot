@@ -42,20 +42,11 @@ export function formatDate(input: string | number | Date): string {
   })
 }
 
-export const formatNumber = (value: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(value)
-
 export const runAsyncFnWithoutBlocking = (
   fn: (...args: any) => Promise<any>
 ) => {
   fn()
 }
-
-export const sleep = (ms: number) =>
-  new Promise(resolve => setTimeout(resolve, ms))
 
 export const getStringFromBuffer = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer))

@@ -5,7 +5,6 @@ import { formatDate } from '@/lib/utils'
 import { UIState } from '@/lib/types'
 import { getSharedChat } from '@/app/actions'
 import { ChatList } from '@/components/chat-list'
-import { FooterText } from '@/components/footer'
 import { AI, getUIStateFromAIState } from '@/lib/chat/actions'
 
 export const runtime = 'edge'
@@ -53,7 +52,6 @@ export default async function SharePage({ params }: SharePageProps) {
           <ChatList messages={uiState} isShared={true} />
         </AI>
       </div>
-      <FooterText className="py-8" />
     </>
   )
 }
