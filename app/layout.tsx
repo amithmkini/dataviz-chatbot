@@ -8,13 +8,18 @@ import { Providers } from '@/components/providers'
 import { Header } from '@/components/header'
 import { Toaster } from '@/components/ui/sonner'
 
+export const runtime = 'edge'
+export const preferredRegion = 'home'
+
 export const metadata = {
-  metadataBase: new URL(`https://${process.env.VERCEL_URL}`),
+   metadataBase: process.env.VERCEL_URL
+    ? new URL(`https://${process.env.VERCEL_URL}`)
+    : undefined,
   title: {
-    default: 'Next.js AI Chatbot',
-    template: `%s - Next.js AI Chatbot`
+    default: 'DataViz Chatbot',
+    template: `%s - DataViz Chatbot`
   },
-  description: 'An AI-powered chatbot template built with Next.js and Vercel.',
+  description: 'An AI-powered chatbot powered by database queries.',
   icons: {
     icon: '/favicon.ico',
     shortcut: '/favicon-16x16.png',

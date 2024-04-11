@@ -25,12 +25,12 @@ import { saveChat } from '@/app/actions'
 import { auth } from '@/auth'
 import { LineBarGraph } from '@/components/graphs'
 import {
-  spinner,
   BotCard,
   BotMessage,
   SystemMessage,
-} from '@/components/stocks'
-import { UserMessage } from '@/components/stocks/message'
+  UserMessage
+} from '@/components/graphs/message'
+import { spinner } from '@/components/graphs/spinner'
 import { Separator } from '@/components/ui/separator'
 import { 
   Chat,
@@ -40,14 +40,15 @@ import {
   ToolCallResponse
 } from '@/lib/types'
 import {
-  formatNumber,
   runAsyncFnWithoutBlocking,
-  sleep,
   nanoid
 } from '@/lib/utils'
 
 import { query_database_func, show_chart_func } from './schemas'
 import { system_prompt } from './prompt'
+
+export const runtime = 'edge'
+export const preferredRegion = 'home'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
@@ -169,105 +170,32 @@ async function query_database(query: string, aiState: any) {
     });
 
     const output = await client.execute(query)
-    const joined = output.rows as Array<JSONValue>
+    // If the number of rows is more than 200, then we need to
+    // trucate the output to 200 rows, and show a warning
+    const sliced = output.rows.slice(0, 200) as Array<JSONValue>
+    const warning = ( output.rows.length > 200 ?
+      `Warning: The number of rows is more than 200. 
+       Only the first 200 rows are shown.` : '' )
 
     return {
       success: true,
-      output: joined
+      output: sliced,
+      warning: warning
     }
 
   } catch (e) {
     if (e instanceof LibsqlError) {
       return {
         success: false,
-        output: e.message
+        output: e.message,
+        warning: ''
       }
     }
   }
   return {
     success: false,
-    output: "Unknown error"
-  }
-}
-
-async function confirmPurchase(symbol: string, price: number, amount: number) {
-  'use server'
-
-  const aiState = getMutableAIState<typeof AI>()
-
-  const purchasing = createStreamableUI(
-    <div className="inline-flex items-start gap-1 md:items-center">
-      {spinner}
-      <p className="mb-2">
-        Purchasing {amount} ${symbol}...
-      </p>
-    </div>
-  )
-
-  const systemMessage = createStreamableUI(null)
-
-  runAsyncFnWithoutBlocking(async () => {
-    await sleep(1000)
-
-    purchasing.update(
-      <div className="inline-flex items-start gap-1 md:items-center">
-        {spinner}
-        <p className="mb-2">
-          Purchasing {amount} ${symbol}... working on it...
-        </p>
-      </div>
-    )
-
-    await sleep(1000)
-
-    purchasing.done(
-      <div>
-        <p className="mb-2">
-          You have successfully purchased {amount} ${symbol}. Total cost:{' '}
-          {formatNumber(amount * price)}
-        </p>
-      </div>
-    )
-
-    systemMessage.done(
-      <SystemMessage>
-        You have purchased {amount} shares of {symbol} at ${price}. Total cost ={' '}
-        {formatNumber(amount * price)}.
-      </SystemMessage>
-    )
-
-    aiState.done({
-      ...aiState.get(),
-      messages: [
-        ...aiState.get().messages.slice(0, -1),
-        {
-          id: nanoid(),
-          role: 'function',
-          name: 'showStockPurchase',
-          content: JSON.stringify({
-            symbol,
-            price,
-            defaultAmount: amount,
-            status: 'completed'
-          })
-        },
-        {
-          id: nanoid(),
-          role: 'system',
-          content: `[User has purchased ${amount} shares of ${symbol} at ${price}. Total cost = ${
-            amount * price
-          }]`
-        }
-      ]
-    })
-  })
-
-  return {
-    purchasingUI: purchasing.value,
-    newMessage: {
-      id: nanoid(),
-      display: systemMessage.value
-    }
+    output: "Unknown error",
+    warning: ''
   }
 }
 
@@ -492,7 +420,6 @@ async function submitUserMessage(content: string) {
 export const AI = createAI<AIState, UIState>({
   actions: {
     submitUserMessage,
-    confirmPurchase,
     setDatabaseCreds
   },
   initialUIState: [],

@@ -1,12 +1,13 @@
-<h1 align="center">Next.js AI Chatbot</h1>
+<h1 align="center">DataViz Chatbot</h1>
 
 <p align="center">
-  An open-source AI chatbot app template built with Next.js, the Vercel AI SDK, OpenAI, and Vercel KV.
+  AI chatbot for data visualization and analytics
 </p>
 
 <p align="center">
   <a href="#features"><strong>Features</strong></a> ·
-  <a href="#running-locally"><strong>Running locally</strong></a>
+  <a href="#running-locally"><strong>Running locally</strong></a> ·
+  <a href="#connecting-databases"><strong>Connecting Databases</strong></a>
 </p>
 <br/>
 
@@ -15,18 +16,11 @@
 - [Next.js](https://nextjs.org) App Router
 - React Server Components (RSCs), Suspense, and Server Actions
 - [Vercel AI SDK](https://sdk.vercel.ai/docs) for streaming chat UI
-- Support for OpenAI (default), Anthropic, Cohere, Hugging Face, or custom AI chat models and/or LangChain
-- [shadcn/ui](https://ui.shadcn.com)
-  - Styling with [Tailwind CSS](https://tailwindcss.com)
-  - [Radix UI](https://radix-ui.com) for headless component primitives
-  - Icons from [Phosphor Icons](https://phosphoricons.com)
-- Chat History, rate limiting, and session storage with [Vercel KV](https://vercel.com/storage/kv)
-- [NextAuth.js](https://github.com/nextauthjs/next-auth) for authentication
-
 
 ## Running locally
 
-You will need to use the environment variables [defined in `.env.example`](.env.example) to run Next.js AI Chatbot. It's recommended you use [Vercel Environment Variables](https://vercel.com/docs/projects/environment-variables) for this, but a `.env` file is all that is necessary.
+First, you need to create either a Vercel KV or Upstash Redis DB to store the chatbot state.
+After that, you will need to use the environment variables [defined in `.env.example`](.env.example) to run Next.js AI Chatbot. 
 
 ```bash
 pnpm install
@@ -34,3 +28,21 @@ pnpm dev
 ```
 
 Your app template should now be running on [localhost:3000](http://localhost:3000/).
+
+If you don't want to setup Upstash, you can run the Docker compose file to start a Redis DB with http server locally:
+
+```bash
+docker compose up
+```
+
+Then, adjust the environment variables in the `.env` file to point to the local Redis server.
+```bash
+KV_URL="http://localhost:8079"
+KV_REST_API_URL="http://localhost:8079"
+KV_REST_API_TOKEN="test"
+KV_REST_API_READ_ONLY_TOKEN="test"
+```
+
+## Connecting Databases
+
+Dataviz Chatbot makes use of [Turso](https://turso.tech) SQLite DBs for querying data. Create a DB on Turso and pass in the URL and the authToken to the application.

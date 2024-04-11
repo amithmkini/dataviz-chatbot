@@ -46,11 +46,11 @@ export function Chat({ id, className, session, missingKeys }: ChatProps) {
     ) {
       router.refresh()
     }
-  }, [aiState.messages, router])
+  }, [aiState.messages, router, path])
 
   useEffect(() => {
     setNewChatId(id)
-  }, [id])
+  }, [id, setNewChatId])
 
   useEffect(() => {
     missingKeys.map(key => {

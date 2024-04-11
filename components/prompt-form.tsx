@@ -5,7 +5,7 @@ import Textarea from 'react-textarea-autosize'
 import { toast } from 'sonner'
 
 import { useActions, useUIState, useAIState } from 'ai/rsc'
-import { UserMessage } from './stocks/message'
+import { UserMessage } from './graphs/message'
 import { type AI } from '@/lib/chat/actions'
 import { Button } from '@/components/ui/button'
 import { IconArrowElbow, IconPlus } from '@/components/ui/icons'
