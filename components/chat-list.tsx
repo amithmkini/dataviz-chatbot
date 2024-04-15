@@ -40,12 +40,22 @@ export function ChatList({ messages, session, isShared }: ChatList) {
         </>
       ) : null}
 
-      {messages.map((message, index) => (
-        <div key={message.id}>
-          {message.display}
-          {index < messages.length - 1 && <Separator className="my-4" />}
-        </div>
-      ))}
+      {messages.map((message, index) => {
+        if (message.display === null) return null;
+        if (Array.isArray(message.display) && 
+            !message.display.some(
+              item => item !== null && item !== undefined)) {
+          return null;
+        }
+
+        return (
+          <div key={message.id}>
+            {message.display !== null && message.display}
+            {index < messages.length - 1 && <Separator className="my-4" />}
+          </div>
+        );
+      })}
+
     </div>
   )
 }

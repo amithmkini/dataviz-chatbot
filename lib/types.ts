@@ -67,6 +67,7 @@ export interface PieDoughnutProps {
 export type ToolCallResponse = {
   tool_call_id: string;
   function_name: string;
+  function_args?: JSONValue;
   tool_call_result: JSONValue;
 }
 

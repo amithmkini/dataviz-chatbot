@@ -23,7 +23,7 @@ import { kv } from '@vercel/kv'
 
 import { saveChat } from '@/app/actions'
 import { auth } from '@/auth'
-import { LineBarGraph } from '@/components/graphs'
+import { LineBarGraph, SqlOutputDialog } from '@/components/graphs'
 import {
   BotCard,
   BotMessage,
@@ -295,17 +295,13 @@ async function submitUserMessage(content: string) {
 
           if (toolCall.func.name === 'query_database') {
             const query = toolCall.func.arguments.query as string
-
-            responseUI.append(
-              <>
-                <SystemMessage>
-                  SQL Query: {query}
-                </SystemMessage>
-                <Separator className='my-4' />
-              </>
-            )
+            const sqlQueryUI = createStreamableUI(<SqlOutputDialog sql={query} separator/>)
+            responseUI.append(sqlQueryUI.value)
+            
             output = await query_database(query, aiState)
- 
+            sqlQueryUI.done(
+              <SqlOutputDialog sql={query} output={JSON.stringify(output.output)} separator/>
+            )
           } else if(toolCall.func.name === 'show_bar_line_chart') {
             const props = 
               toolCall.func.arguments as unknown as LineBarGraphProps
@@ -341,12 +337,13 @@ async function submitUserMessage(content: string) {
           newMessages.push({
             tool_call_id: toolCall.id,
             function_name: toolCall.func.name,
+            function_args: toolCall.func.arguments as JSONValue,
             tool_call_result: output
           })
         }
 
         // Update aiState
-        aiState.update({
+        aiState.done({
           ...aiState.get(),
           messages: [
             ...aiState.get().messages,
@@ -355,6 +352,7 @@ async function submitUserMessage(content: string) {
               id: nanoid(),
               role: 'tool',
               name: message.function_name,
+              data: message.function_args,
               content: JSON.stringify(message.tool_call_result),
               tool_call_id: message.tool_call_id,
             }))
@@ -508,7 +506,7 @@ export const AI = createAI<AIState, UIState>({
 
 export const getUIStateFromAIState = (aiState: Chat) => {
   return aiState.messages
-    .filter(message => (message.role !== 'system' && message.role !== 'tool'))
+    .filter(message => (message.role !== 'system'))
     .map((message, index) => ({
       id: `${aiState.chatId}-${index}`,
       databaseUrl: aiState.databaseUrl,
@@ -547,6 +545,15 @@ const getDisplayComponent = (message: Message) => {
         })
       }
       return <BotMessage content={message.content} />
+    case 'tool':
+      if (message.name === 'query_database') {
+        if (message.data) {
+          const args = message.data as { query: string }
+          const output = JSON.stringify(JSON.parse(message.content).output)
+          return <SqlOutputDialog sql={args.query} output={output}/>
+        }
+      }
+      return null
     default:
       console.log('Unknown message role:', message.role)
       return null
