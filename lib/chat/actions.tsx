@@ -64,36 +64,61 @@ const openai = new OpenAI({
 const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo'
 const temperature: number =  +(process.env.OPENAI_MODEL_TEMPERATURE || 0.5)
 
+let warning = ''
 async function correlation(query: string, aiState: any, ui: any) {
   // Given a dataset, we need to calculate the correlation matrix.
   // We need to get all the SQL from the rows list.
-
-  const client = createClient({
-    url: aiState.get().databaseUrl,
-    authToken: aiState.get().databaseAuthToken
-  });
-
-  const data = await client.execute(query)
-  client.close()
-
-  const columns: (number)[][] = data.columns.map(() => [])
-
-  data.rows.forEach(row => {
-    data.columns.forEach((col, index) => {
-      const value = row[col];
-      // Convert null values to 0, and convert non-nulls to numbers
-      columns[index].push(value === null ? 0 : Number(value));
+  try {
+    const client = createClient({
+      url: aiState.get().databaseUrl,
+      authToken: aiState.get().databaseAuthToken
     });
-  });
   
-  const matrix = calculateCorrelationMatrix(columns)
+    const data = await client.execute(query)
+    client.close()
 
-  ui.update(
-    <SqlOutputDialog sql={query} output={JSON.stringify(matrix)} separator/>
-  )
+    const columns: (number)[][] = data.columns.map(() => [])
+
+    data.rows.forEach(row => {
+      // If there are any null values, skip the row.
+      if (Object.values(row).some(value => value === null)) {
+        warning = 'NULL values found in rows. Skipping them'
+        return
+      }
+      data.columns.forEach((col, index) => {
+        const value = row[col]
+        columns[index].push(value === null ? 0 : Number(value))
+      })
+    })
+    // First convert the matrix to string/number format.
+    const matrix = calculateCorrelationMatrix(columns) as (string | number)[][]
+    // Add the column names to the matrix at the first row and first column.
+    matrix.unshift(data.columns)
+    matrix.forEach((row, index) => row.unshift(data.columns[index]))
+    matrix[0][0] = ''
+
+    ui.update(
+      <SqlOutputDialog sql={query} output={JSON.stringify(matrix)} separator/>
+    )
+    return {
+      success: true,
+      output: matrix,
+      warning: warning
+    }
+  } catch (e) {
+    if (e instanceof LibsqlError) {
+      return {
+        success: false,
+        output: e.message,
+        warning: warning
+      }
+    }
+  }
+
   return {
-    success: 'true',
-    output: matrix
+    success: false,
+    output: 'Error in finding correlation',
+    warning: warning
   }
 }
 
