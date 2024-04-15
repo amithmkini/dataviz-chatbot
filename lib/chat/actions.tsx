@@ -23,7 +23,7 @@ import { kv } from '@vercel/kv'
 
 import { saveChat } from '@/app/actions'
 import { auth } from '@/auth'
-import { LineBarGraph, SqlOutputDialog } from '@/components/graphs'
+import { LineBarGraph, SqlOutputDialog, PieChart } from '@/components/graphs'
 import {
   BotCard,
   BotMessage,
@@ -48,10 +48,11 @@ import {
 import {
   query_database_func,
   bar_line_chart_func,
-  pie_chart_func
+  pie_chart_func,
+  correlation_func
 } from './schemas'
 import { system_prompt } from './prompt'
-import { PieChart } from '@/components/graphs/pie'
+import { calculateCorrelationMatrix } from './statistics'
 
 export const runtime = 'edge'
 export const preferredRegion = 'home'
@@ -62,6 +63,39 @@ const openai = new OpenAI({
 
 const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo'
 const temperature: number =  +(process.env.OPENAI_MODEL_TEMPERATURE || 0.5)
+
+async function correlation(query: string, aiState: any, ui: any) {
+  // Given a dataset, we need to calculate the correlation matrix.
+  // We need to get all the SQL from the rows list.
+
+  const client = createClient({
+    url: aiState.get().databaseUrl,
+    authToken: aiState.get().databaseAuthToken
+  });
+
+  const data = await client.execute(query)
+  client.close()
+
+  const columns: (number)[][] = data.columns.map(() => [])
+
+  data.rows.forEach(row => {
+    data.columns.forEach((col, index) => {
+      const value = row[col];
+      // Convert null values to 0, and convert non-nulls to numbers
+      columns[index].push(value === null ? 0 : Number(value));
+    });
+  });
+  
+  const matrix = calculateCorrelationMatrix(columns)
+
+  ui.update(
+    <SqlOutputDialog sql={query} output={JSON.stringify(matrix)} separator/>
+  )
+  return {
+    success: 'true',
+    output: matrix
+  }
+}
 
 async function filter_schema(output: ResultSet) {
   // We need to get all the SQL from the rows list.Since we are simply reading 
@@ -135,6 +169,7 @@ async function setDatabaseCreds(url: string, authToken: string) {
     const output = await client.execute(
       "SELECT sql FROM sqlite_master WHERE type='table';"
     );
+    client.close()
     const schema = await filter_schema(output);
     // Now add the schema to the state.
     const schemaMessage = `[Database schema]\n${schema}`;
@@ -183,6 +218,7 @@ async function query_database(query: string, aiState: any) {
       `Warning: The number of rows is more than 200. 
        Only the first 200 rows are shown.` : '' )
 
+    client.close()
     return {
       success: true,
       output: sliced,
@@ -217,6 +253,10 @@ const tools: Tool[] = [
   {
     type: 'function',
     function: pie_chart_func
+  },
+  {
+    type: 'function',
+    function: correlation_func,
   }
 ]
 
@@ -332,6 +372,13 @@ async function submitUserMessage(content: string) {
             output = {
               success: true,
             }
+          } else if(toolCall.func.name === 'correlation') {
+            const query = toolCall.func.arguments.query as string
+            const sqlQueryUI = createStreamableUI(<SqlOutputDialog sql={query} separator/>)
+            responseUI.append(sqlQueryUI.value)
+
+            output = await correlation(query, aiState, sqlQueryUI)
+            sqlQueryUI.done()
           }
 
           newMessages.push({
@@ -546,7 +593,7 @@ const getDisplayComponent = (message: Message) => {
       }
       return <BotMessage content={message.content} />
     case 'tool':
-      if (message.name === 'query_database') {
+      if (message.name === 'query_database' || message.name === 'correlation') {
         if (message.data) {
           const args = message.data as { query: string }
           const output = JSON.stringify(JSON.parse(message.content).output)
