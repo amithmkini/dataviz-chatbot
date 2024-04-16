@@ -18,14 +18,15 @@ import {
 import { type AI } from '@/lib/chat/actions'
 import { cn } from '@/lib/utils'
 import { useEnterSubmit } from '@/lib/hooks/use-enter-submit'
+import { useLocalStorage } from '@/lib/hooks/use-local-storage'
 
 
 export default function DatabaseInput() {
 
   const router = useRouter()
   const [aiState] = useAIState()
-  const [databaseUrl, setDatabaseUrl] = React.useState(aiState.databaseUrl ?? '')
-  const [databaseAuthToken, setDatabaseAuthToken] = React.useState(aiState.databaseAuthToken ?? '')
+  const [databaseUrl, setDatabaseUrl] = useLocalStorage('databaseUrl', aiState.databaseUrl)
+  const [databaseAuthToken, setDatabaseAuthToken] = useLocalStorage('databaseAuthToken', aiState.databaseAuthToken)
   const [submitDisabled, setsubmitDisabled] = React.useState(false)
   const { formRef, onKeyDown } = useEnterSubmit()
   const inputRef = React.useRef<HTMLInputElement>(null)

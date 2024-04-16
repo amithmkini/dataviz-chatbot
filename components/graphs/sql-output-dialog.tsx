@@ -104,7 +104,7 @@ function SqlOutputTable({
           <TableIconWithTooltip />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>SQL Output</DialogTitle>
           <DialogDescription>
