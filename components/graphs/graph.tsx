@@ -1,15 +1,18 @@
 import React, { useRef, useEffect, useMemo } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
-import { Chart, registerables } from 'chart.js';
+import { Chart, registerables, Interaction } from 'chart.js';
+// @ts-ignore
+import {CrosshairPlugin} from 'chartjs-plugin-crosshair';
 import type { ChartData, ChartDataset, ChartOptions } from 'chart.js';
 import { LineBarGraphProps } from '@/lib/types';
-Chart.register(...registerables);
+import { intersection } from 'zod';
+Chart.register(...registerables, CrosshairPlugin );
 
 type LineOrBarData = ChartData<'line'> | ChartData<'bar'>;
 type LineOrBarOptions = ChartOptions<'line'> | ChartOptions<'bar'>;
 
 
-export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: LineBarGraphProps }) {
+export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: LineBarGraphProps }) { 
   const chartRef = useRef<Chart<any> | null>(null);
 
   const data = useMemo<LineOrBarData>(() => ({
@@ -38,6 +41,13 @@ export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: Lin
       title: {
         display: true,
         text: title,
+      },
+      crosshair: {
+        callbacks: {
+          afterZoom: () => function(start, end) {
+            console.log(start, end);
+          }
+        }
       },
     },
     scales: {
