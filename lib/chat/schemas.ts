@@ -23,8 +23,8 @@ const query_database_func: ToolFunc = {
   )
 }
 
-const show_chart_func: ToolFunc = {
-  name: 'show_chart',
+const bar_line_chart_func: ToolFunc = {
+  name: 'show_bar_line_chart',
   description: 'Show a bar or line chart',
   parameters: zodToJsonSchema(
     z.object({
@@ -38,4 +38,20 @@ const show_chart_func: ToolFunc = {
   )
 }
 
-export { query_database_func, show_chart_func }
+const pie_chart_func: ToolFunc = {
+  name: 'show_pie_chart',
+  description: 'Show a pie or doughnut chart',
+  parameters: zodToJsonSchema(
+    z.object({
+      title: z.string().describe('The title of the chart'),
+      type: z.enum(['pie', 'doughnut']).describe('The type of chart to display'),
+      labels: z.array(z.string()).describe('The labels for each section of the chart'),
+      dataset: z.array(z.number()).describe('The data for each section of the chart'),
+      tooltip: z.string().optional().default('Value')
+        .describe('The tooltip to display when hovering over the chart')
+    })
+      .required()
+  )
+}
+
+export { query_database_func, bar_line_chart_func, pie_chart_func }
