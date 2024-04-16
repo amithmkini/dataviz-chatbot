@@ -37,15 +37,21 @@ import {
   LineBarGraphProps,
   AIState,
   UIState,
-  ToolCallResponse
+  ToolCallResponse,
+  PieDoughnutProps
 } from '@/lib/types'
 import {
   runAsyncFnWithoutBlocking,
   nanoid
 } from '@/lib/utils'
 
-import { query_database_func, show_chart_func } from './schemas'
+import {
+  query_database_func,
+  bar_line_chart_func,
+  pie_chart_func
+} from './schemas'
 import { system_prompt } from './prompt'
+import { PieChart } from '@/components/graphs/pie'
 
 export const runtime = 'edge'
 export const preferredRegion = 'home'
@@ -206,7 +212,11 @@ const tools: Tool[] = [
   },
   {
     type: 'function',
-    function: show_chart_func,
+    function: bar_line_chart_func,
+  },
+  {
+    type: 'function',
+    function: pie_chart_func
   }
 ]
 
@@ -296,13 +306,28 @@ async function submitUserMessage(content: string) {
             )
             output = await query_database(query, aiState)
  
-          } else if(toolCall.func.name === 'show_chart') {
+          } else if(toolCall.func.name === 'show_bar_line_chart') {
             const props = 
               toolCall.func.arguments as unknown as LineBarGraphProps
             responseUI.append(
               <>
                 <BotCard>
                   <LineBarGraph props={props} />
+                </BotCard>
+                <Separator className='my-4' />
+              </>
+            )
+
+            output = {
+              success: true,
+            }
+          } else if(toolCall.func.name === 'show_pie_chart') {
+            const props =
+              toolCall.func.arguments as unknown as PieDoughnutProps
+            responseUI.append(
+              <>
+                <BotCard>
+                  <PieChart props={props} />
                 </BotCard>
                 <Separator className='my-4' />
               </>
@@ -504,11 +529,18 @@ const getDisplayComponent = (message: Message) => {
           if (toolCall.function.name == 'query_database') {
             const args = JSON.parse(toolCall.function.arguments)
             return (<SystemMessage key={toolCall.id}>SQL Query: {args.query}</SystemMessage>)
-          } else if (toolCall.function.name == 'show_chart') {
+          } else if (toolCall.function.name == 'show_bar_line_chart') {
             const props = JSON.parse(toolCall.function.arguments) as LineBarGraphProps
             return (
               <BotCard key={toolCall.id}>
                 <LineBarGraph props={props} />
+              </BotCard>
+            )
+          } else if (toolCall.function.name == 'show_pie_chart') {
+            const props = JSON.parse(toolCall.function.arguments) as PieDoughnutProps
+            return (
+              <BotCard key={toolCall.id}>
+                <PieChart props={props} />
               </BotCard>
             )
           }

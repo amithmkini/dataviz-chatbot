@@ -55,6 +55,14 @@ export interface LineBarGraphProps {
   }
 }
 
+export interface PieDoughnutProps {
+  title: string
+  type: 'pie' | 'doughnut'
+  labels: string[]
+  tooltip: string
+  dataset: number[]
+}
+
 // ai/rsc types
 export type ToolCallResponse = {
   tool_call_id: string;
