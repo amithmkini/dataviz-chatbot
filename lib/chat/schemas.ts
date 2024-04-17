@@ -1,6 +1,7 @@
+import dedent from 'dedent'
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import type { Function as ToolFunc } from 'ai';
+import type { Function as ToolFunc } from 'ai'
 
 
 const XAxisSchema = z.object({
@@ -54,4 +55,17 @@ const pie_chart_func: ToolFunc = {
   )
 }
 
-export { query_database_func, bar_line_chart_func, pie_chart_func }
+const correlation_func: ToolFunc = {
+  name: 'correlation',
+  description: dedent`
+    Calculate the correlation between sets of data from a SQL query.
+    The SQL query should return a table with two or more columns of numeric data.
+  `,
+  parameters: zodToJsonSchema(
+    z.object({
+      query: z.string().describe('The SQL query to run on the database'),
+    }).required()
+  )
+}
+
+export { query_database_func, bar_line_chart_func, pie_chart_func, correlation_func }
