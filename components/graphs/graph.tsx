@@ -44,7 +44,7 @@ export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: Lin
       },
       crosshair: {
         callbacks: {
-          afterZoom: () => function(start, end) {
+          afterZoom: () => function(start: number, end: number) {
             console.log(start, end);
           }
         }
