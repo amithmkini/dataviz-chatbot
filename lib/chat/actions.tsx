@@ -596,10 +596,7 @@ const getDisplayComponent = (message: Message) => {
       if (message.tool_calls) {
         const toolCalls = typeof message.tool_calls === 'string' ? JSON.parse(message.tool_calls) : message.tool_calls
         return toolCalls.map((toolCall: ToolCall) => {
-          if (toolCall.function.name == 'query_database') {
-            const args = JSON.parse(toolCall.function.arguments)
-            return (<SystemMessage key={toolCall.id}>SQL Query: {args.query}</SystemMessage>)
-          } else if (toolCall.function.name == 'show_bar_line_chart') {
+          if (toolCall.function.name == 'show_bar_line_chart') {
             const props = JSON.parse(toolCall.function.arguments) as LineBarGraphProps
             return (
               <BotCard key={toolCall.id}>
