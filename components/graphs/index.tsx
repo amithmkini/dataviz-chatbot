@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { LineBarGraphSkeleton } from './graph-skeleton'
+import { SqlOutputSkeleton } from './sql-output-skeleton'
 import { PieSkeleton } from './pie-skeleton'
 
 const LineBarGraph = dynamic(
@@ -20,4 +21,12 @@ const PieChart = dynamic(
   }
 )
 
-export { LineBarGraph, PieChart }
+const SqlOutputDialog = dynamic(
+  () => import('@/components/graphs/sql-output-dialog').then(mod => mod.SqlOutputDialog),
+  {
+    ssr: false,
+    loading: () => <SqlOutputSkeleton />
+  }
+)
+
+export { LineBarGraph, PieChart, SqlOutputDialog }

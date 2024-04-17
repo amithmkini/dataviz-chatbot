@@ -32,6 +32,12 @@ export function PromptForm({
   const [_, setMessages] = useUIState<typeof AI>()
   const [aiState, setAIState] = useAIState<typeof AI>()
 
+  React.useEffect(() => {
+    if (inputRef.current && aiState.databaseUrl !== '') {
+      inputRef.current.focus()
+    }
+  }, [aiState])
+
   return (
     <form
       ref={formRef}

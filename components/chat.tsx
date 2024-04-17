@@ -44,7 +44,10 @@ export function Chat({ id, className, session, missingKeys }: ChatProps) {
       path.includes('chat') && !path.includes('share') &&
       aiState.messages[messagesLength - 1].role === 'assistant'
     ) {
-      router.refresh()
+      // Delay the refresh to not make it jarring
+      setTimeout(() => {
+        router.refresh()
+      }, 2000)
     }
   }, [aiState.messages, router, path])
 
