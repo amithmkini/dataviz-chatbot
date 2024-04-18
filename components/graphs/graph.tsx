@@ -1,9 +1,11 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useId, useCallback } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
-import { Chart, registerables, Interaction } from 'chart.js';
+import { Chart, registerables } from 'chart.js';
 import type { ChartData, ChartDataset, ChartOptions } from 'chart.js';
 import { LineBarGraphProps } from '@/lib/types';
 import { registerCrosshairPlugin } from './chart-crosshair-hotfix';
+import { useAIState } from 'ai/rsc'
+
 Chart.register(...registerables );
 registerCrosshairPlugin()
 
@@ -14,6 +16,29 @@ type LineOrBarOptions = ChartOptions<'line'> | ChartOptions<'bar'>;
 
 export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: LineBarGraphProps }) { 
   const chartRef = useRef<Chart<any> | null>(null);
+  const [aiState, setAIState] = useAIState()
+  const id = useId()
+  
+  const afterZoomFunc = useCallback((start: number, end:number) => {
+    const follow_up_msg = {
+      id,
+      role: 'system' as const,
+      content: `[User has zoomed between x-axis index ${start} and ${end} in the above graph: ${title}. Give more details about the selected section in above graph]`
+    }
+    console.log(follow_up_msg)
+
+    if (aiState.messages[aiState.messages.length - 1]?.id === id) {
+      setAIState({
+        ...aiState,
+        messages: [...aiState.messages.slice(0, -1), follow_up_msg]
+      })
+    } else {
+      setAIState({
+        ...aiState,
+        messages: [...aiState.messages, follow_up_msg]
+      })
+    }
+  }, [id, title, aiState, setAIState])
 
   const data = useMemo<LineOrBarData>(() => ({
     labels: x.data,
@@ -47,9 +72,7 @@ export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: Lin
           enabled: false
         },
         callbacks: {
-          afterZoom: () => function(start: number, end: number) {
-            console.log(start, end);
-          }
+          afterZoom: () => (start: number, end: number) => afterZoomFunc(start, end)
         }
       },
     },
