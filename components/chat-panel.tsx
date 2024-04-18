@@ -34,11 +34,11 @@ export function ChatPanel({
   const [shareDialogOpen, setShareDialogOpen] = React.useState(false)
 
   const exampleMessages: any[] = [
-    {
-      heading: 'What are the',
-      subheading: 'trending memecoins today?',
-      message: `Show me a line chart for temperaure and humidity for Chicago over any 10 consecutive days. The values are stored in hourly format, so average values over one day.`
-    },
+    // {
+    //   heading: 'What are the',
+    //   subheading: 'trending memecoins today?',
+    //   message: `What are the trending memecoins today?`
+    // },
     // {
     //   heading: 'What is the price of',
     //   subheading: '$DOGE right now?',
