@@ -31,6 +31,8 @@
     "@vercel/og": "^0.6.2",
     "ai": "^3.0.12",
     "chart.js": "^4.4.2",
+    "chartjs-plugin-crosshair": "^2.0.0",
+    "chartjs-plugin-zoom": "^2.0.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "d3-scale": "^4.0.2",
@@ -60,6 +62,7 @@
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.10",
+    "@types/chartjs-plugin-crosshair": "^1.1.4",
     "@types/d3-scale": "^4.0.8",
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.48",

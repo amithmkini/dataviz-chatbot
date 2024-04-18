@@ -59,6 +59,12 @@ dependencies:
   chart.js:
     specifier: ^4.4.2
     version: 4.4.2
+  chartjs-plugin-crosshair:
+    specifier: ^2.0.0
+    version: 2.0.0(chart.js@4.4.2)
+  chartjs-plugin-zoom:
+    specifier: ^2.0.1
+    version: 2.0.1(chart.js@4.4.2)
   class-variance-authority:
     specifier: ^0.7.0
     version: 0.7.0
@@ -142,6 +148,9 @@ devDependencies:
   '@tailwindcss/typography':
     specifier: ^0.5.10
     version: 0.5.10(tailwindcss@3.4.1)
+  '@types/chartjs-plugin-crosshair':
+    specifier: ^1.1.4
+    version: 1.1.4
   '@types/d3-scale':
     specifier: ^4.0.8
     version: 4.0.8
@@ -1509,6 +1518,18 @@ packages:
       tailwindcss: 3.4.1
     dev: true
 
+  /@types/chart.js@2.9.41:
+    resolution: {integrity: sha512-3dvkDvueckY83UyUXtJMalYoH6faOLkWQoaTlJgB4Djde3oORmNP0Jw85HtzTuXyliUHcdp704s0mZFQKio/KQ==}
+    dependencies:
+      moment: 2.30.1
+    dev: true
+
+  /@types/chartjs-plugin-crosshair@1.1.4:
+    resolution: {integrity: sha512-AvHMQMFh7aK+npOcyqezzaRpCgA5vqg3d885RD2xUyXULeUcgvxbLPf5v6yX5QqmbUZB3xRDOv52vCabBw+YKg==}
+    dependencies:
+      '@types/chart.js': 2.9.41
+    dev: true
+
   /@types/d3-scale@4.0.8:
     resolution: {integrity: sha512-gkK1VVTr5iNiYJ7vWDI+yUFFlszhNMtVeneJ6lUTKPjprsvLLI9/tgEGiXJOnlINJA8FyA88gfnQsHbybVZrYQ==}
     dependencies:
@@ -2190,6 +2211,23 @@ packages:
     engines: {pnpm: '>=8'}
     dependencies:
       '@kurkle/color': 0.3.2
+    dev: false
+
+  /chartjs-plugin-crosshair@2.0.0(chart.js@4.4.2):
+    resolution: {integrity: sha512-Vs6strRvYpzL92v40r/rAWhh+7au8VnfyC/m2ZHXcXeLEWeFjDgMvXjWdX+eARhbgHQo+uGIKyq9fmkS79GIyQ==}
+    peerDependencies:
+      chart.js: ^4.0.1
+    dependencies:
+      chart.js: 4.4.2
+    dev: false
+
+  /chartjs-plugin-zoom@2.0.1(chart.js@4.4.2):
+    resolution: {integrity: sha512-ogOmLu6e+Q7E1XWOCOz9YwybMslz9qNfGV2a+qjfmqJYpsw5ZMoRHZBUyW+NGhkpQ5PwwPA/+rikHpBZb7PZuA==}
+    peerDependencies:
+      chart.js: '>=3.2.0'
+    dependencies:
+      chart.js: 4.4.2
+      hammerjs: 2.0.8
     dev: false
 
   /chokidar@3.5.3:
@@ -3356,6 +3394,11 @@ packages:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
     dev: true
 
+  /hammerjs@2.0.8:
+    resolution: {integrity: sha512-tSQXBXS/MWQOn/RKckawJ61vvsDpCom87JgxiYdGwHdOa0ht0vzUWDlfioofFCRU0L+6NGDt6XzbgoJvZkMeRQ==}
+    engines: {node: '>=0.8.0'}
+    dev: false
+
   /has-bigints@1.0.2:
     resolution: {integrity: sha512-tSvCKtBr9lkF0Ex0aQiP9N+OpV4zi2r/Nee5VkRDbaqv35RLYMzbwQfFSZZH0kR+Rd6302UJZ2p/bJCEoR3VoQ==}
     dev: true
@@ -4391,6 +4434,10 @@ packages:
   /minipass@7.0.4:
     resolution: {integrity: sha512-jYofLM5Dam9279rdkWzqHozUo4ybjdZmCsDHePy5V/PbBcVMiSZR97gmAy45aqi8CK1lG2ECd356FU86avfwUQ==}
     engines: {node: '>=16 || 14 >=14.17'}
+    dev: true
+
+  /moment@2.30.1:
+    resolution: {integrity: sha512-uEmtNhbDOrWPFS+hdjFCBfy9f2YoyzRpwcl+DqpC6taX21FzsTLQVbMV/W7PzNSX6x/bhC1zA3c2UQ5NzH6how==}
     dev: true
 
   /mri@1.2.0:
