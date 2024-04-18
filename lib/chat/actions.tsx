@@ -415,7 +415,7 @@ async function submitUserMessage(content: string) {
         }
 
         // Update aiState
-        aiState.done({
+        aiState.update({
           ...aiState.get(),
           messages: [
             ...aiState.get().messages,
