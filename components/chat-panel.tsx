@@ -1,11 +1,8 @@
 import * as React from 'react'
 
-import { shareChat } from '@/app/actions'
-import { Button } from '@/components/ui/button'
 import { PromptForm } from '@/components/prompt-form'
 import { ButtonScrollToBottom } from '@/components/button-scroll-to-bottom'
-import { IconShare } from '@/components/ui/icons'
-import { ChatShareDialog } from '@/components/chat-share-dialog'
+import { RocketIcon } from '@radix-ui/react-icons' 
 import { useAIState, useActions, useUIState } from 'ai/rsc'
 import type { AI } from '@/lib/chat/actions'
 import { nanoid } from 'nanoid'
@@ -31,10 +28,18 @@ export function ChatPanel({
   const [aiState] = useAIState()
   const [messages, setMessages] = useUIState<typeof AI>()
   const { submitUserMessage, getExampleMessagesFromSchema } = useActions()
-  const [shareDialogOpen, setShareDialogOpen] = React.useState(false)
+  const [graphSelection, setGraphSelection] = React.useState(false)
   const [exampleMessages, setExampleMessages] = React.useState<any[]>([])
 
   React.useEffect(() => {
+    // If the last message has the ID that ends with 'graph',
+    // then set the graphSelection to true
+    if (aiState.messages[aiState.messages.length - 1]?.id?.endsWith('graph')) {
+      setGraphSelection(true)
+    } else {
+      setGraphSelection(false)
+    }
+
     const fetch_status = async (schema: string) => {
       const status = await getExampleMessagesFromSchema(schema)
       if (status.success) {
@@ -92,36 +97,14 @@ export function ChatPanel({
             ))}
         </div>
 
-        {messages?.length >= 2 ? (
-          <div className="flex h-12 items-center justify-center">
-            <div className="flex space-x-2">
-              {id && title ? (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShareDialogOpen(true)}
-                  >
-                    <IconShare className="mr-2" />
-                    Share
-                  </Button>
-                  <ChatShareDialog
-                    open={shareDialogOpen}
-                    onOpenChange={setShareDialogOpen}
-                    onCopy={() => setShareDialogOpen(false)}
-                    shareChat={shareChat}
-                    chat={{
-                      id,
-                      title,
-                      messages: aiState.messages
-                    }}
-                  />
-                </>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
         <div className="space-y-4 border-t bg-background px-4 py-2 shadow-lg sm:rounded-t-xl sm:border md:py-4">
+          {graphSelection ? (
+            <div className="flex items-center justify-between">
+              <div className="flex flex-row gap-2 text-sm text-zinc-500">
+                <RocketIcon className='mt-0.5'/> Ask about this graph segment
+              </div>
+            </div>
+            ) : (null)}
           <PromptForm input={input} setInput={setInput} />
         </div>
       </div>
