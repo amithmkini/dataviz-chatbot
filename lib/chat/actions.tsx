@@ -56,6 +56,8 @@ import {
 } from './schemas'
 import { system_prompt } from './prompt'
 import { calculateCorrelationMatrix } from './statistics'
+import { FollowupPanel } from "@/components/follow-up";
+import React from "react";
 
 export const runtime = 'edge'
 export const preferredRegion = 'home'
@@ -341,6 +343,26 @@ async function query_database(query: string, aiState: any) {
   }
 }
 
+async function getFollowUpQuestions(lastResponse: string): Promise<string[]> {
+  const completion = await openai.chat.completions.create({
+    model: model,
+    temperature: 0.7, // Slightly higher temperature for more varied questions
+    messages: [{
+      role: "system",
+      content: "Generate three follow-up questions based on the following information:",
+    }, {
+      role: "assistant",
+      content: lastResponse,
+    }]
+  });
+
+  // Use optional chaining and nullish coalescing to safely access the content
+  const content = completion.choices?.[0]?.message?.content ?? "";
+
+  // Split by new lines and filter empty lines if content is not empty
+  return content ? content.split('\n').filter(line => line.trim() !== '') : [];
+}
+
 const tools: Tool[] = [
   {
     type: 'function',
@@ -568,12 +590,27 @@ async function submitUserMessage(content: string) {
     while (true) {
       const { done } = await reader.read()
       if (done) {
-        // Cleanup. Close streaming UIs.
-        responseUI.done()
-        spinnerUI.done(<></>)
-        spinnerWithResponseUI.done()
-        aiState.done({
-          ...aiState.get(),
+        responseUI.append(
+            <div>
+              <h3>Follow-Ups</h3>
+            </div>
+        )
+        getFollowUpQuestions(textValue).then(followUpQuestions => {
+          followUpQuestions.forEach(question => {
+            console.log("Follow-up question:", question);
+            responseUI.append(
+                <BotCard>
+                  <FollowupPanel question={question}/>
+                </BotCard>
+            )
+          });
+          // Cleanup. Close streaming UIs.
+          responseUI.done()
+          spinnerUI.done(<></>)
+          spinnerWithResponseUI.done()
+          aiState.done({
+            ...aiState.get(),
+          })
         })
         break
       }
