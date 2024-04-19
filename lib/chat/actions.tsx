@@ -1,6 +1,7 @@
 import 'server-only'
 
-import { 
+import {
+  experimental_generateText,
   JSONValue,
   OpenAIStream,
   Tool,
@@ -15,11 +16,13 @@ import {
   getAIState,
   createStreamableValue
 } from 'ai/rsc'
+import { openai as oai } from '@ai-sdk/openai'
 import dedent from 'dedent'
 import { createClient, LibsqlError, ResultSet } from '@libsql/client/web'
 import OpenAI from 'openai'
 import { ChatCompletionMessageParam } from 'openai/resources'
 import { kv } from '@vercel/kv'
+import { z } from 'zod'
 
 import { saveChat } from '@/app/actions'
 import { auth } from '@/auth'
@@ -223,6 +226,78 @@ async function setDatabaseCreds(url: string, authToken: string) {
   }
   return {
     success: true
+  }
+}
+
+async function getExampleMessagesFromSchema(schema: string) {
+  'use server'
+
+  let exampleMessages: any[] = []
+
+  if (!schema) {
+    return {
+      success: false,
+      exampleMessages,
+    }
+  }
+
+  const result = await experimental_generateText({
+    model: oai.chat(model),
+    temperature,
+    // maxTokens: 512,
+    tools: {
+      example_queries: {
+        description: 'An example user query based on the schema',
+        parameters: z.object({
+          heading: z.string().describe('Summarize the message'),
+          subheading: z.string().describe('Show first few words of the message'),
+          message: z.string().describe('The user query/message that is sent to the AI')
+        }),
+      },
+    },
+    prompt: dedent`
+      Given a SQL schema, provide example natural language queries that users
+      can use to query and visualize their data. Read the schema, silently
+      understand what the dataset is about, guess the domain, and generate
+      natural language queries that user can use to send it to the LLM.
+
+      The LLM generates DB queries based on the user query and draws graphs
+      and charts (think line chart, bar charts, pie charts). For example, if
+      the dataset is on sales figures, the questions will be like:
+
+      - Show me a bar chart of top 10 bar charts.
+      - What is the total revenue generated from selling the best seller.
+      - Show me a pie chart of all goods sold by quantity in the month of May.
+
+      If the schema is about sales and product, you have no clue about the
+      type and names of the product, so avoid using a specific entity name.
+      On the other hand, if the possibilities is something limited, say
+      phone manufacturers in the United States, you know of the popular ones
+      that will be there for sure.
+
+      Generate at least 2 queries, and at most 4 queries. And call the tool
+      in parallel, all at once. There will be no response from the results.
+
+      ${schema}
+    `
+  });
+
+  for (const toolCall of result.toolCalls) {
+    switch (toolCall.toolName) {
+      case 'example_queries': {
+        exampleMessages.push({
+          heading: toolCall.args.heading,
+          subheading: toolCall.args.subheading,
+          message: toolCall.args.message
+        })
+        break;
+      }
+    }
+  }
+
+  return {
+    success: true,
+    exampleMessages: exampleMessages,
   }
 }
 
@@ -515,7 +590,8 @@ async function submitUserMessage(content: string) {
 export const AI = createAI<AIState, UIState>({
   actions: {
     submitUserMessage,
-    setDatabaseCreds
+    setDatabaseCreds,
+    getExampleMessagesFromSchema
   },
   initialUIState: [],
   initialAIState: { chatId: nanoid(), databaseUrl: '', databaseAuthToken: '', messages: [] },
