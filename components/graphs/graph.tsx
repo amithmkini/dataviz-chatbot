@@ -17,7 +17,7 @@ type LineOrBarOptions = ChartOptions<'line'> | ChartOptions<'bar'>;
 export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: LineBarGraphProps }) { 
   const chartRef = useRef<Chart<any> | null>(null);
   const [aiState, setAIState] = useAIState()
-  const id = useId()
+  const id = useId() + '-graph'
   
   const afterZoomFunc = useCallback((start: number, end:number) => {
     const follow_up_msg = {
@@ -76,6 +76,7 @@ export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: Lin
         }
       },
     },
+    animation: false,
     scales: {
       y1: {
         type: 'linear',

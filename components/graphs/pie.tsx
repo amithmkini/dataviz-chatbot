@@ -30,7 +30,8 @@ export function PieChart(
         display: true,
         text: title,
       },
-    }
+    },
+    animations: false
   }), [title])
 
   useEffect(() => {
@@ -46,13 +47,13 @@ export function PieChart(
       {type === 'pie' && (
           <Pie
             data={data}
-            options={options}
+            options={options as any}
             ref={chartRef} />
         )}
         {type === 'doughnut' && (
           <Doughnut
             data={data}
-            options={options}
+            options={options as any}
             ref={chartRef} />
         )}
       </div>
