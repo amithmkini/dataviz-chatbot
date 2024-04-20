@@ -22,9 +22,8 @@ function FollowupQuestionButton({question} : {question: string}) {
         ...currentMessages,
         {
           id: nanoid(),
-          databaseUrl: '',
-          databaseAuthToken: '',
-          display: <UserMessage>{question}</UserMessage>
+          display: <UserMessage>{question}</UserMessage>,
+          lastMessage: false
         }
         ])
 
@@ -58,7 +57,7 @@ export function FollowupPanel() {
   }
 
   return (
-    <div className="border rounded-md p-4 gap-2 flex flex-col items-start">
+    <div className="rounded-md mt-4 gap-2 flex flex-col items-start">
       <Button
         variant='secondary'
         onClick={handleSubmit}

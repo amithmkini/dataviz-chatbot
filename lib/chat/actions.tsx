@@ -652,7 +652,8 @@ async function submitUserMessage(content: string) {
 
   return {
     id: nanoid(),
-    display: spinnerWithResponseUI.value
+    display: spinnerWithResponseUI.value,
+    lastMessage: true
   }
 }
 
@@ -728,9 +729,8 @@ export const getUIStateFromAIState = (aiState: Chat) => {
     .filter(message => (message.role !== 'system'))
     .map((message, index) => ({
       id: `${aiState.chatId}-${index}`,
-      databaseUrl: aiState.databaseUrl,
-      databaseAuthToken: aiState.databaseAuthToken,
-      display: getDisplayComponent(message)
+      display: getDisplayComponent(message),
+      lastMessage: true
     }))
 }
 
