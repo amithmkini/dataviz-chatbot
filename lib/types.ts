@@ -80,7 +80,6 @@ export type AIState = {
 
 export type UIState = {
   id: string
-  databaseUrl: string
-  databaseAuthToken: string
   display: React.ReactNode
+  lastMessage: boolean
 }[]

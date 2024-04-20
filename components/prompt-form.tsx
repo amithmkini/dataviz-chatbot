@@ -67,9 +67,8 @@ export function PromptForm({
           ...currentMessages,
           {
             id: nanoid(),
-            databaseUrl: '',
-            databaseAuthToken: '',
-            display: <UserMessage>{value}</UserMessage>
+            display: <UserMessage>{value}</UserMessage>,
+            lastMessage: false
           }
         ])
 

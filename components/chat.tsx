@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { ChatList } from '@/components/chat-list'
 import { ChatPanel } from '@/components/chat-panel'
 import { useLocalStorage } from '@/lib/hooks/use-local-storage'
+import type { AI } from '@/lib/chat/actions'
 import { useEffect, useState } from 'react'
 import { useUIState, useAIState } from 'ai/rsc'
 import { Session } from '@/lib/types'
@@ -12,6 +13,7 @@ import { Message } from 'ai'
 import { useScrollAnchor } from '@/lib/hooks/use-scroll-anchor'
 import { toast } from 'sonner'
 import DatabaseInput from './database-input'
+import { FollowupPanel } from './follow-up'
 
 export interface ChatProps extends React.ComponentProps<'div'> {
   initialMessages?: Message[]
@@ -24,10 +26,12 @@ export function Chat({ id, className, session, missingKeys }: ChatProps) {
   const router = useRouter()
   const path = usePathname()
   const [input, setInput] = useState('')
-  const [messages] = useUIState()
-  const [aiState] = useAIState()
+  const [messages] = useUIState<typeof AI>()
+  const [aiState] = useAIState<typeof AI>()
 
   const [_, setNewChatId] = useLocalStorage('newChatId', id)
+
+  const [followupVisible, setFollowupVisible] = useState(false)
 
   useEffect(() => {
     if (session?.user) {
@@ -50,6 +54,19 @@ export function Chat({ id, className, session, missingKeys }: ChatProps) {
       }, 2000)
     }
   }, [aiState.messages, router, path])
+
+  useEffect(() => {
+    if (
+        messages.length > 0 &&
+        messages[messages.length - 1].lastMessage &&
+        aiState.messages.length > 0 &&
+        aiState.messages[aiState.messages.length - 1].role === 'assistant') {
+      setFollowupVisible(true)
+    }
+    else {
+      setFollowupVisible(false)
+    }
+  }, [aiState, messages])
 
   useEffect(() => {
     setNewChatId(id)
@@ -78,6 +95,9 @@ export function Chat({ id, className, session, missingKeys }: ChatProps) {
           <ChatList messages={messages} isShared={false} session={session} />
         )}
         <div className="h-px w-full" ref={visibilityRef} />
+        <div className='relative mx-auto max-w-2xl px-4'>
+          {followupVisible && <FollowupPanel key={messages[messages.length - 1].id}/>}
+        </div>
       </div>
       <ChatPanel
         id={id}

@@ -25,7 +25,6 @@ export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: Lin
       role: 'system' as const,
       content: `[User has zoomed between x-axis index ${start} and ${end} in the above graph: ${title}. Give more details about the selected section in above graph]`
     }
-    console.log(follow_up_msg)
 
     if (aiState.messages[aiState.messages.length - 1]?.id === id) {
       setAIState({
@@ -109,6 +108,7 @@ export function LineBarGraph({ props: { title, type, x, y1, y2 } }: { props: Lin
         },
       },
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [x, y1, y2, title]);
 
   useEffect(() => {
