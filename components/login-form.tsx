@@ -19,6 +19,7 @@ export default function LoginForm() {
         toast.error(getMessageFromCode(result.resultCode), {duration: 5000})
       } else {
         toast.success(getMessageFromCode(result.resultCode), {duration: 3000})
+        router.replace('/new')
         router.refresh()
       }
     }

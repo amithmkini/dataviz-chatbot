@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx'
 import { customAlphabet } from 'nanoid'
 import { twMerge } from 'tailwind-merge'
+import { z } from 'zod'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -78,3 +79,32 @@ export const getMessageFromCode = (resultCode: string) => {
       return 'Logged in!'
   }
 }
+
+const IntScale = z.coerce.number().int().min(1).max(5);
+
+export const FeedbackSchema = z.object({
+  uiPurposeClear: IntScale.describe(
+    "The UI clearly indicated the purpose of the system."
+  ),
+  chatbotResponseRelevant: IntScale.describe(
+    "The chatbot response was relevant to the query"
+  ),
+  promptSuggestionHelpful: IntScale.describe(
+    "The prompt suggestion in the beginning helped me begin the conversation."
+  ),
+  easyToEditRefineRecover: IntScale.describe(
+    "It is easy to edit, refine or recover when the chatbot is wrong"
+  ),
+  zoomFunctionHelpful: IntScale.describe(
+    "The zoom function can help me understand the graph better and I can ask questions about the graph"
+  ),
+  chatbotRemembersContext: IntScale.describe(
+    "The chatbot can remember the context of the conversation"
+  ),
+  chatbotShowedDesiredGraph: IntScale.describe(
+    "The chatbot showed me the graph that I wanted to see"
+  ),
+  otherFeedback: z.string().describe(
+    "Any other feedback you would like to provide?"
+  )
+});
