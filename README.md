@@ -20,7 +20,7 @@
 ## Running locally
 
 First, you need to create either a Vercel KV or Upstash Redis DB to store the chatbot state.
-After that, you will need to use the environment variables [defined in `.env.example`](.env) to run Next.js AI Chatbot. 
+After that, you will need to use the environment variables [defined in `.env.example`](.env.example) to run Next.js AI Chatbot. 
 
 ```bash
 pnpm install

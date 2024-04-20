@@ -56,7 +56,6 @@ import {
 } from './schemas'
 import { system_prompt } from './prompt'
 import { calculateCorrelationMatrix } from './statistics'
-import { FollowupPanel } from "@/components/follow-up";
 import React from "react";
 
 export const runtime = 'edge'
@@ -343,24 +342,74 @@ async function query_database(query: string, aiState: any) {
   }
 }
 
-async function getFollowUpQuestions(lastResponse: string): Promise<string[]> {
-  const completion = await openai.chat.completions.create({
-    model: model,
-    temperature: 0.7, // Slightly higher temperature for more varied questions
-    messages: [{
-      role: "system",
-      content: "Generate three follow-up questions based on the following information:",
-    }, {
-      role: "assistant",
-      content: lastResponse,
-    }]
+async function getFollowUpQuestions() {
+  'use server'
+
+  const aiState = getMutableAIState<typeof AI>()
+
+  // Get only the last message from the user, and then the last message
+  // with content from the assistant.
+
+  const schema = aiState.get().messages[0].content as string
+  const lastUserMessage = aiState.get().messages.filter(
+    message => message.role === 'user'
+  ).pop()
+  const lastAsstMessage = aiState.get().messages.filter(
+    message => message.role === 'assistant' && message.content
+  ).pop()
+
+  if (!lastUserMessage || !lastAsstMessage) {
+    return []
+  }
+
+  let followupMessages: any[] = []
+
+  const result = await experimental_generateText({
+    model: oai.chat(model),
+    temperature,
+    maxTokens: 100,
+    tools: {
+      followup_message: {
+        description: dedent`A followup query that the user can ask
+                            based on the last user message`,
+        parameters: z.object({
+          message: z.string().describe('The user query that is sent to the AI')
+        }).required(),
+      },
+    },
+    prompt: dedent`
+      Given a SQL schema, the user message and the AI response, provide a
+      follow-up question that the user (not AI) can ask based on the last 
+      AI response.
+
+      For example, if the user message is "Show me the top 10 sales figures",
+      and the AI response is a bar chart of the top 10 sales figures, the
+      follow-up question can be "What is the total revenue generated from the
+      top 10 sales figures?"
+
+      Generate at least 2 queries, and at most 4 queries. And call the tool
+      in parallel, all at once. There will be no response from the results.
+
+      ${schema}
+
+      [User message]
+      ${lastUserMessage.content}
+
+      [Assistant response]
+      ${lastAsstMessage.content}
+    `
   });
 
-  // Use optional chaining and nullish coalescing to safely access the content
-  const content = completion.choices?.[0]?.message?.content ?? "";
+  for (const toolCall of result.toolCalls) {
+    switch (toolCall.toolName) {
+      case 'followup_message': {
+        followupMessages.push(toolCall.args.message)
+        break;
+      }
+    }
+  }
 
-  // Split by new lines and filter empty lines if content is not empty
-  return content ? content.split('\n').filter(line => line.trim() !== '') : [];
+  return followupMessages
 }
 
 const tools: Tool[] = [
@@ -590,27 +639,11 @@ async function submitUserMessage(content: string) {
     while (true) {
       const { done } = await reader.read()
       if (done) {
-        responseUI.append(
-            <div>
-              <h3>Follow-Ups</h3>
-            </div>
-        )
-        getFollowUpQuestions(textValue).then(followUpQuestions => {
-          followUpQuestions.forEach(question => {
-            console.log("Follow-up question:", question);
-            responseUI.append(
-                <BotCard>
-                  <FollowupPanel question={question}/>
-                </BotCard>
-            )
-          });
-          // Cleanup. Close streaming UIs.
-          responseUI.done()
-          spinnerUI.done(<></>)
-          spinnerWithResponseUI.done()
-          aiState.done({
-            ...aiState.get(),
-          })
+        responseUI.done()
+        spinnerUI.done(<></>)
+        spinnerWithResponseUI.done()
+        aiState.done({
+          ...aiState.get(),
         })
         break
       }
@@ -628,7 +661,8 @@ export const AI = createAI<AIState, UIState>({
   actions: {
     submitUserMessage,
     setDatabaseCreds,
-    getExampleMessagesFromSchema
+    getExampleMessagesFromSchema,
+    getFollowUpQuestions
   },
   initialUIState: [],
   initialAIState: { chatId: nanoid(), databaseUrl: '', databaseAuthToken: '', messages: [] },
