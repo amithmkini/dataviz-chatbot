@@ -1,8 +1,6 @@
 'use server'
 
-import { z } from 'zod'
-import { kv } from '@vercel/kv'
-import { createClient, LibsqlError, ResultSet } from '@libsql/client/web'
+import { createClient, LibsqlError } from '@libsql/client/web'
 
 import { FeedbackSchema } from "@/lib/utils"
 import { auth } from '@/auth'
@@ -11,8 +9,6 @@ interface Result {
   type: string,
   message: string
 }
-
-type FeedbackData = z.infer<typeof FeedbackSchema>;
 
 export async function submitFeedback(
   _prevState: Result | undefined,
