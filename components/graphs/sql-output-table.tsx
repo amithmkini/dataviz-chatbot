@@ -16,7 +16,7 @@ export function SqlTable({
   output
 }: {output: JSONValue}) {
 
-  if (!output) {
+  if (!output || !Array.isArray(output) || output.length === 0) {
     return (
       <>
         No SQL Output to display.
